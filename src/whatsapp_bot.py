@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 # Load local .env file
-load_dotenv(dotenv_path="config/.env")
+load_dotenv(dotenv_path="config/.env", override=True)
 
 # Twilio credentials
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -12,6 +12,7 @@ TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
 # Twilio client
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
 
 # --- In-memory storage for votes ---
 votes = {}  # {poll_id: {user_number: choice_index}}
