@@ -22,7 +22,7 @@ def send_message(to: str, message: str):
     :param to: Recipient number in format 'whatsapp:+1234567890'
     :param message: Text to send
     """
-    return client.messages.create(
+    client.messages.create(
         from_=TWILIO_WHATSAPP_NUMBER,
         body=message,
         to=to
@@ -38,44 +38,36 @@ def send_poll(to: list[str], poll_id: str, question: str, options: list[str]):
     poll_text = question + "\n"
     for i, opt in enumerate(options, start=1):
         poll_text += f"{i}. {opt}\n"
-
-    results = []
+    
     for number in to:
-        msg = send_message(number, poll_text)
-        results.append(msg.sid)
-    return results
+        send_message(number, poll_text)
 
 def register_vote(poll_id: str, user_number: str, reply: str):
     """
     Record a user's vote for a poll.
-    Returns a tuple: (success: bool, message: str)
+    :param poll_id: Identifier of the poll
+    :param user_number: WhatsApp number of the user
+    :param reply: User's reply as a string (e.g., '1', '2', '3')
     """
     if poll_id not in votes:
         print(f"No poll with id {poll_id} found.")
-        return False, "Poll not found."
+        return "Poll not found."
 
     try:
         choice_index = int(reply.strip()) - 1
         if choice_index < 0:
             raise ValueError()
     except ValueError:
-        return False, "Invalid response. Please reply with the number of your choice."
+        return "Invalid response. Please reply with the number of your choice."
 
     votes[poll_id][user_number] = choice_index
-    return True, f"Vote registered for option {choice_index + 1}."
+    return f"Vote registered for option {choice_index + 1}."
 
-def send_confirmation(user_number: str, poll_id: int):
+def send_confirmation(user_number: str, choice_index: int):
     """
     Sends a confirmation message to a user after voting.
     :param user_number: WhatsApp number of voter
-    :param poll_id:
+    :param choice_index: The option index they selected
     """
-    if poll_id not in votes:
-        return send_message(user_number, "No poll found.")
-
-    choice_index = votes[poll_id].get(user_number)
-    if choice_index is None:
-        return send_message(user_number, "You haven't voted yet.")
-    # send confirmation
-    choice_display = choice_index + 1
-    return send_message(user_number, f"Thanks, your vote for option {choice_display} has been recorded!")
+    message = f"Thanks! Your vote for option {choice_index} has been recorded ✅"
+    send_message(user_number, message)
