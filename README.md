@@ -79,3 +79,111 @@ movie-night-orchestrator/
     └── requirements-prod.txt         # Production dependencies
 
 
+## **Sanne: Calendar + Orchestrator** 
+
+- [ ] Setup Google Calendar API credentials
+- [ ] Create `src/calendar_agent.py`
+- [ ] Test calendar authentication
+- [ ] Test free time detection
+- [ ] Create `src/utils/time_utils.py` - time helper functions
+- [ ] Create `src/utils/config_loader.py` - load .env files
+- [ ] Start `src/orchestrator.py` skeleton (wait for others' APIs)
+- [ ] Create `notebooks/01_calendar_test.ipynb` - document tests
+- [ ] Help with integration when others are ready
+- [ ] Complete `src/orchestrator.py` - wire everything together
+- [ ] Add proactive checking logic (when to suggest movie night)
+- [ ] Add error handling
+- [ ] Help with final testing
+- [ ] Work on `main.py` - command line interface
+
+**Files:**
+- `src/calendar_agent.py` 
+- `src/utils/time_utils.py`
+- `src/utils/config_loader.py`
+- `src/orchestrator.py` (collaborate with team)
+- `notebooks/01_calendar_test.ipynb`
+- `main.py`
+
+---
+
+## **Ioana: Movies (Cineville + Letterboxd + Matching)** 
+
+- [ ] **Investigate Cineville**
+  - Open https://www.cineville.nl/agenda
+  - Open Browser DevTools → Network tab
+  - Look for API calls (JSON responses)
+  - **Decision:** API exists? → use it. No API? → scrape HTML
+- [ ] **Create `src/cineville_scraper.py`**
+  - If API: implement API calls
+  - If no API: implement BeautifulSoup scraper
+  - Create mock data fallback
+  - Test with real Cineville website
+- [ ] **Create `src/letterboxd_integration.py`**
+  - Method 1: Scrape public profile
+  - Method 2: Manual input fallback
+  - Test with your own Letterboxd username
+- [ ] **Create `src/movie_matcher.py`**
+  - Combine Cineville + Letterboxd
+  - Scoring algorithm (rate movies by preference)
+  - Get TMDb API key (free, 5 minutes)
+  - Fetch movie details from TMDb
+- [ ] **Create mock data files:**
+  - `data/mock_showtimes.json`
+  - `data/mock_letterboxd.json`
+- [ ] Polish matching algorithm
+- [ ] Test with different Letterboxd profiles
+- [ ] Handle edge cases (no movies found, etc.)
+- [ ] Integration with orchestrator
+- [ ] Create `notebooks/02_cineville_test.ipynb`, `03_letterboxd_test.ipynb`, `05_movie_matcher_test.ipynb`
+
+**Files:**
+- `src/cineville_scraper.py`
+- `src/letterboxd_integration.py`
+- `src/movie_matcher.py`
+- `data/mock_showtimes.json`
+- `data/mock_letterboxd.json`
+- `notebooks/02_cineville_test.ipynb`
+- `notebooks/03_letterboxd_test.ipynb`
+- `notebooks/05_movie_matcher_test.ipynb`
+
+---
+
+## **Noor: WhatsApp + Integration** 
+
+- [ ] **Setup Twilio WhatsApp**
+  - Sign up: https://www.twilio.com/try-twilio
+  - Get Account SID + Auth Token
+  - Join WhatsApp sandbox (send "join <code>")
+  - Get teammates to join sandbox too
+  - Add credentials to `config/.env`
+- [ ] **Create `src/whatsapp_bot.py`**
+  - Implement `send_message()`
+  - Implement `send_movie_poll()`
+  - Implement `register_vote()`
+  - Implement `send_confirmation()`
+  - Test sending yourself a message
+- [ ] **Test WhatsApp polling flow**
+  - Send test poll to yourself
+  - Manually reply with vote
+  - Test vote counting
+  - Test confirmation message
+
+- [ ] **Create group testing**
+  - Send poll to team WhatsApp group
+  - Test multi-person voting
+  - Fix any issues
+- [ ] **Help with orchestrator integration**
+  - Work with Person 1 to integrate WhatsApp into main flow
+- [ ] Add reminder functionality
+- [ ] Polish message formatting
+- [ ] Add emoji and better UX
+- [ ] Test edge cases (no votes, tie, etc.)
+- [ ] Integration testing with full team
+- [ ] Create `notebooks/04_whatsapp_test.ipynb`
+
+**Files:**
+- `src/whatsapp_bot.py`
+- `notebooks/04_whatsapp_test.ipynb`
+- Help with `src/orchestrator.py` (integration)
+
+---
