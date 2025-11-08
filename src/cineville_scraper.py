@@ -238,27 +238,182 @@ class CinevilleScraper:
 
         return evening
 
-    def get_movies_for_free_slot(self, free_start, free_end):
+    def get_movies_in_time_range(
+    self, 
+    start_datetime: datetime, 
+    end_datetime: datetime,
+    limit_amsterdam: bool = True
+):
         """
-        Old helper: Get movies that fit in a free time slot, based on *today*.
-        You probably won't need this right now, but it's kept for later.
+        Get movies with showtimes in a specific datetime range
+        
+        Args:
+            start_datetime: Start of time range
+            end_datetime: End of time range
+            limit_amsterdam: Filter for Amsterdam cinemas
+        
+        Returns:
+            List of movie dicts with schedules
         """
-        all_showtimes = self.get_showtimes_today()
+        print(f"\n Fetching Cineville movies for {start_datetime.strftime('%a %d %b %H:%M')} - {end_datetime.strftime('%H:%M')}")
+        
+        try:
+            # Convert to UTC for API
+            start_utc = start_datetime.astimezone(pytz.UTC).isoformat()
+            end_utc = end_datetime.astimezone(pytz.UTC).isoformat()
+            
+            payload = {
+                "productionId": {"isNull": False},
+                "startDate": {
+                    "gte": start_utc,
+                    "lt": end_utc
+                },
+                "venue": {},
+                "page": {"limit": 100},
+                "isHidden": {"eq": False},
+                "embed": {
+                    "production": True,
+                    "venue": True
+                },
+                "sort": {"startDate": "asc"}
+            }
+            
+            response = self.session.post(self.api_url, json=payload, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if '_embedded' in data and 'events' in data['_embedded']:
+                events = data['_embedded']['events']
+                
+                # Parse into our format
+                showtimes = []
+                amsterdam_cinemas = [
+                    'eye', 'rialto', 'kriterion', 'ketelhuis',
+                    'the movies', 'lab111', 'uitkijk', 'studio/k',
+                    'cinecenter', 'filmhallen', 'de balie'
+                ]
+                
+                for event in events:
+                    try:
+                        embedded = event.get('_embedded', {})
+                        production = embedded.get('production', {})
+                        venue = embedded.get('venue', {})
+                        
+                        title = production.get('title')
+                        cinema_name = venue.get('name', '')
+                        
+                        if not title or not cinema_name:
+                            continue
+                        
+                        # Filter for Amsterdam
+                        if limit_amsterdam:
+                            is_amsterdam = any(
+                                ams_cinema.lower() in cinema_name.lower() 
+                                for ams_cinema in amsterdam_cinemas
+                            )
+                            if not is_amsterdam:
+                                continue
+                        
+                        # Get showtime
+                        start_date_str = event.get('startDate')
+                        if start_date_str:
+                            showtime = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                            showtime = showtime.astimezone(self.timezone)
+                        else:
+                            continue
+                        
+                        showtimes.append({
+                            'title': title,
+                            'cinema': cinema_name,
+                            'showtime': showtime,
+                            'source': 'cineville-api',
+                            'duration': production.get('attributes', {}).get('duration'),
+                            'year': production.get('attributes', {}).get('releaseYear'),
+                        })
+                    
+                    except:
+                        continue
+                
+                print(f" Found {len(showtimes)} showtimes in this time range")
+                return showtimes
+            
+            return []
+        
+        except Exception as e:
+            print(f" API Error: {e}")
+            return []
 
-        matching = []
+
+    def get_movies_for_free_slots(
+        self,
+        free_slots,
+        limit_amsterdam: bool = True
+    ):
+        """
+        Get movies that fit in the given free slots
+        
+        Args:
+            free_slots: List of (start, end) datetime tuples
+            limit_amsterdam: Filter for Amsterdam cinemas
+        
+        Returns:
+            List of movies with schedules grouped by title
+        """
+        print(f"\n Getting Cineville movies for {len(free_slots)} free slots")
+        
+        all_showtimes = []
+        
+        # Query Cineville for each free slot
+        for slot_start, slot_end in free_slots:
+            slot_showtimes = self.get_movies_in_time_range(
+                slot_start, 
+                slot_end, 
+                limit_amsterdam
+            )
+            all_showtimes.extend(slot_showtimes)
+        
+        if not all_showtimes:
+            print(" No movies found in any free slot")
+            return []
+        
+        # Group by movie title
+        movies_dict = {}
+        
         for show in all_showtimes:
-            if show["showtime"]:
-                duration_mins = show.get("duration") or 150  # default 2.5h
-                movie_end = show["showtime"] + timedelta(
-                    minutes=duration_mins + 30
-                )  # + buffer
-
-                if free_start <= show["showtime"] <= free_end:
-                    if movie_end <= free_end + timedelta(minutes=30):
-                        matching.append(show)
-
-        print(f"\nFound {len(matching)} movies in free slot")
-        return matching
+            title = show['title']
+            year = show.get('year')
+            duration = show.get('duration')
+            cinema = show['cinema']
+            showtime = show['showtime']
+            
+            # Create key (title, year)
+            key = (title, year)
+            
+            if key not in movies_dict:
+                movies_dict[key] = {
+                    'title': title,
+                    'year': year,
+                    'duration': duration,
+                    'schedules': {}
+                }
+            
+            # Add this showtime to the movie's schedule
+            if cinema not in movies_dict[key]['schedules']:
+                movies_dict[key]['schedules'][cinema] = []
+            
+            movies_dict[key]['schedules'][cinema].append(showtime)
+        
+        # Convert to list and sort schedules
+        movies = list(movies_dict.values())
+        
+        for movie in movies:
+            for cinema in movie['schedules']:
+                movie['schedules'][cinema] = sorted(movie['schedules'][cinema])
+        
+        print(f" Found {len(movies)} unique movies across all slots")
+        
+        return movies
 
     # ------------------------------------------------------------------
     # INTERNAL HELPERS

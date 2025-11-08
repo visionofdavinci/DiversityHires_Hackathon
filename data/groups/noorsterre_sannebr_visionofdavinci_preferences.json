@@ -1,0 +1,17 @@
+{
+  "preferred_genres": {
+    "18": 1
+  },
+  "preferred_cinemas": {
+    "Filmhallen": 1
+  },
+  "preferred_times": [
+    21
+  ],
+  "user_satisfaction": {
+    "visionofdavinci": 1.7453916666666687,
+    "SanneBr": 1.8948500000000004,
+    "noorsterre": 1.541808333333333
+  },
+  "total_sessions": 1
+}
