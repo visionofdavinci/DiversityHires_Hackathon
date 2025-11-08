@@ -126,7 +126,7 @@ movie-night-orchestrator/
   - Method 1: Scrape public profile
   - Method 2: Manual input fallback
   - Test with your own Letterboxd username
-- [ ] **Create `src/movie_matcher.py`**
+- [x] **Create `src/movie_matcher.py`**
   - Combine Cineville + Letterboxd
   - Scoring algorithm (rate movies by preference)
   - Get TMDb API key (free, 5 minutes)
@@ -135,7 +135,7 @@ movie-night-orchestrator/
   - `data/mock_showtimes.json`
   - `data/mock_letterboxd.json`
 - [ ] Polish matching algorithm
-- [ ] Test with different Letterboxd profiles
+- [x] Test with different Letterboxd profiles
 - [ ] Handle edge cases (no movies found, etc.)
 - [ ] Integration with orchestrator
 - [ ] Create `notebooks/02_cineville_test.ipynb`, `03_letterboxd_test.ipynb`, `05_movie_matcher_test.ipynb`
