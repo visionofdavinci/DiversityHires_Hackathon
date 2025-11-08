@@ -85,14 +85,14 @@ movie-night-orchestrator/
 
 ## **Sanne: Calendar + Orchestrator** 
 
-- [ ] Setup Google Calendar API credentials
-- [ ] Create `src/calendar_agent.py`
-- [ ] Test calendar authentication
-- [ ] Test free time detection
-- [ ] Create `src/utils/time_utils.py` - time helper functions
-- [ ] Create `src/utils/config_loader.py` - load .env files
+- [x] Setup Google Calendar API credentials
+- [x] Create `src/calendar_agent.py`
+- [x] Test calendar authentication
+- [x] Test free time detection
+- [x] Create `src/utils/time_utils.py` - time helper functions
+- [x] Create `src/utils/config_loader.py` - load .env files
 - [ ] Start `src/orchestrator.py` skeleton (wait for others' APIs)
-- [ ] Create `notebooks/01_calendar_test.ipynb` - document tests
+- [x] Create `notebooks/01_calendar_test.ipynb` - document tests
 - [ ] Help with integration when others are ready
 - [ ] Complete `src/orchestrator.py` - wire everything together
 - [ ] Add proactive checking logic (when to suggest movie night)
@@ -154,13 +154,13 @@ movie-night-orchestrator/
 
 ## **Noor: WhatsApp + Integration** 
 
-- [ ] **Setup Twilio WhatsApp**
+- [x] **Setup Twilio WhatsApp**
   - Sign up: https://www.twilio.com/try-twilio
   - Get Account SID + Auth Token
   - Join WhatsApp sandbox (send "join <code>")
   - Get teammates to join sandbox too
   - Add credentials to `config/.env`
-- [ ] **Create `src/whatsapp_bot.py`**
+- [x] **Create `src/whatsapp_bot.py`**
   - Implement `send_message()`
   - Implement `send_movie_poll()`
   - Implement `register_vote()`
