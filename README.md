@@ -24,6 +24,8 @@ Why it's cool: Eliminates the "what do we do tonight" paralysis
 
 Structure of project:
 
+```text
+
 movie-night-orchestrator/
 │
 ├── README.md                          # Project documentation
@@ -78,6 +80,7 @@ movie-night-orchestrator/
     ├── deploy.sh                     # Deployment script
     └── requirements-prod.txt         # Production dependencies
 
+```
 
 ## **Sanne: Calendar + Orchestrator** 
 
