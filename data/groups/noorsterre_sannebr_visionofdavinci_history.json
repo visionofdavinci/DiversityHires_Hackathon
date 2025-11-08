@@ -1,0 +1,125 @@
+[
+  {
+    "timestamp": "2025-11-08T20:41:07.306846",
+    "group_members": [
+      "SanneBr",
+      "noorsterre",
+      "visionofdavinci"
+    ],
+    "chosen_title": "Voor de meisjes",
+    "chosen_year": 2025,
+    "chosen_genres": [
+      18
+    ],
+    "chosen_score": 2.1898925000000005,
+    "per_user_scores": {
+      "visionofdavinci": 1.7453916666666687,
+      "SanneBr": 1.8948500000000004,
+      "noorsterre": 1.541808333333333
+    },
+    "chosen_cinema": "Filmhallen",
+    "chosen_time": "2025-11-09T21:05:00+01:00",
+    "all_options": [
+      {
+        "title": "Wisdom of Happiness",
+        "year": 2024,
+        "group_score": 2.1939088095238106,
+        "per_user_scores": {
+          "visionofdavinci": 1.7326654761904785,
+          "SanneBr": 1.682783333333334,
+          "noorsterre": 1.6664619047619054
+        }
+      },
+      {
+        "title": "Voor de meisjes",
+        "year": 2025,
+        "group_score": 2.1898925000000005,
+        "per_user_scores": {
+          "visionofdavinci": 1.7453916666666687,
+          "SanneBr": 1.8948500000000004,
+          "noorsterre": 1.541808333333333
+        }
+      },
+      {
+        "title": "Red Path",
+        "year": 2024,
+        "group_score": 2.1875986904761913,
+        "per_user_scores": {
+          "visionofdavinci": 1.7369583333333352,
+          "SanneBr": 1.737878571428573,
+          "noorsterre": 1.6252416666666665
+        }
+      },
+      {
+        "title": "All That's Left of You",
+        "year": 2025,
+        "group_score": 2.1851267857142864,
+        "per_user_scores": {
+          "visionofdavinci": 1.751800000000002,
+          "SanneBr": 1.8228761904761912,
+          "noorsterre": 1.5687916666666666
+        }
+      },
+      {
+        "title": "Bugonia",
+        "year": 2025,
+        "group_score": 2.1656830423280438,
+        "per_user_scores": {
+          "visionofdavinci": 1.692473809523812,
+          "SanneBr": 1.6492547619047628,
+          "noorsterre": 1.670991269841271
+        }
+      },
+      {
+        "title": "The Penguin Lessons",
+        "year": 2025,
+        "group_score": 2.140339722222223,
+        "per_user_scores": {
+          "visionofdavinci": 1.7561750000000023,
+          "SanneBr": 1.7846047619047625,
+          "noorsterre": 1.5159154761904756
+        }
+      },
+      {
+        "title": "Als de kraanvogels overvliegen",
+        "year": 1957,
+        "group_score": 2.138674722222223,
+        "per_user_scores": {
+          "visionofdavinci": 1.56761904761905,
+          "SanneBr": 1.9230000000000005,
+          "noorsterre": 1.5396869047619044
+        }
+      },
+      {
+        "title": "DJ Ahmet",
+        "year": 2025,
+        "group_score": 2.135050436507937,
+        "per_user_scores": {
+          "visionofdavinci": 1.679665476190477,
+          "SanneBr": 1.727016666666668,
+          "noorsterre": 1.5781416666666666
+        }
+      },
+      {
+        "title": "Cinema Paradiso",
+        "year": 1988,
+        "group_score": 2.133890277777778,
+        "per_user_scores": {
+          "visionofdavinci": 1.56761904761905,
+          "SanneBr": 1.944683333333333,
+          "noorsterre": 1.520720238095238
+        }
+      },
+      {
+        "title": "Pavements",
+        "year": 2024,
+        "group_score": 2.1312800000000007,
+        "per_user_scores": {
+          "visionofdavinci": 1.678039285714287,
+          "SanneBr": 1.7022333333333344,
+          "noorsterre": 1.586088095238095
+        }
+      }
+    ]
+  }
+]

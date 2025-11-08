@@ -49,6 +49,9 @@ movie-night-orchestrator/
 │   ├── movie_matcher.py              # Movie matching logic 
 │   ├── whatsapp_bot.py               # WhatsApp messaging 
 │   ├── orchestrator.py               # Main orchestration brain 
+|   ├── group_history.py              # Track & learn from choices
+|   ├── mood_filter.py                # Mood-based recommendations
+|   ├── test_new_features.py          # Test script
 │   │
 │   └── utils/                        # Utility functions
 │       ├── __init__.py
@@ -189,5 +192,39 @@ movie-night-orchestrator/
 - `src/whatsapp_bot.py`
 - `notebooks/04_whatsapp_test.ipynb`
 - Help with `src/orchestrator.py` (integration)
+
+## **Conversation flow example:**
+User: "Hey, find us a movie for tonight"
+Bot: "On it! Who's coming?"
+User: "Me, Alice, and Bob"
+
+Bot: "Perfect! Found 3 free time slots:
+     1. Today 20:00-23:00
+     2. Tomorrow 19:00-22:00  
+     3. Sunday 18:00-21:00
+     Which works best?"
+User: "1"
+
+Bot: "Analyzing your Letterboxd profiles...
+     This might take 30 sec..."
+
+Bot: "Found 5 perfect movies!
+     
+     1. Perfect Days (2023)
+        Group score: 9.2/10
+        You: 9.5 | Alice: 9.0 | Bob: 8.9
+        
+        EYE Filmmuseum @ 20:30
+        Rialto @ 21:00
+        
+        Why? "Everyone will love this drama. 
+        Based on Alice's love of Japanese cinema 
+        and your rating of Paterson 5★"
+        
+     2. The Zone of Interest (2024)
+        Group score: 8.8/10
+        ..."
+
+Bot: "Vote for your favorite! [Poll]"
 
 ---

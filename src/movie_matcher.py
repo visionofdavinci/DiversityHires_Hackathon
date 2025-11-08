@@ -45,6 +45,8 @@ try:
     from .cineville_scraper import CinevilleScraper
     from .letterboxd_integration import LetterboxdIntegration, MoviePreference
     from .calendar_matcher import find_common_available_times
+    from .group_history import GroupHistory, create_group_id, GENRE_MAP
+    from .mood_filter import MoodFilter
 except ImportError:
     # When run as a script: python src/movie_matcher.py
     import sys
@@ -57,6 +59,8 @@ except ImportError:
     from cineville_scraper import CinevilleScraper
     from letterboxd_integration import LetterboxdIntegration, MoviePreference
     from calendar_matcher import find_common_available_times
+    from group_history import GroupHistory, create_group_id, GENRE_MAP
+    from mood_filter import MoodFilter
 
 
 # -----------------------------------------------------------------------------
@@ -588,8 +592,18 @@ class GroupMovieMatcher:
     max_results: int = 20,
     use_calendar: bool = True,
     min_slot_minutes: int = 120,
+    mood: Optional[str] = None,
+    learn_from_history: bool = True,
 ) -> List[GroupMatchedMovie]:
         """Main entry point"""
+        # Initialize group history
+        group_id = create_group_id(usernames)
+        group_history = GroupHistory(group_id=group_id)
+        
+        # Show group summary
+        summary = group_history.get_group_summary()
+        print(f" Group: {group_id}")
+        print(f" {summary['message']}")
         
         # 1) Build taste profiles
         profiles: List[UserTasteProfile] = []
@@ -631,7 +645,7 @@ class GroupMovieMatcher:
             print("[GroupMovieMatcher] No free slots found, aborting.")
             return []
 
-        # 3) Get Cineville movies ONLY during those free slots ✅
+        # 3) Get Cineville movies ONLY during those free slots 
         print("\n[GroupMovieMatcher] Fetching Cineville movies for free slots...")
         cineville_movies = self.cineville_scraper.get_movies_for_free_slots(
             free_slots=free_slots,
@@ -699,13 +713,21 @@ class GroupMovieMatcher:
                     tmdb=tmdb_data,
                 )
             )
-
-        # 5) Sort and return
+        # APPLY MOOD FILTER (if provided)
+        if mood:
+            mood_filter = MoodFilter()
+            results = mood_filter.apply_mood(results, mood=mood, aggressive=False)
+            
+        # APPLY GROUP LEARNING (if enabled and history exists)
+        if learn_from_history and len(group_history.history) > 0:
+            results = group_history.apply_learning(results, usernames)
+            
+        # Sort and return
         results.sort(key=lambda r: r.group_score, reverse=True)
         if max_results and max_results > 0:
             results = results[:max_results]
-
-        return results
+            
+        return results, group_history
 
 
 # -----------------------------------------------------------------------------
