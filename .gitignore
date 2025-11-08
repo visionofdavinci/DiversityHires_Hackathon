@@ -1,7 +1,7 @@
 # Ignore Google credentials
 credentials.json
 token.json
-
+/tokens
 # Ignore Python cache
 __pycache__/
 *.pyc

@@ -11,33 +11,41 @@ from google.auth.transport.requests import Request
 
 
 
-def authenticate():
-    config = get_config()
+def authenticate(token_filename: str = None):
+    """
+    Authenticate a Google Calendar user using a specific token file.
+    If no token_filename is provided, fallback to default from config.
+    """
+    from google.auth.transport.requests import Request  # make sure this import exists
+    cfg = get_config()
+    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
+    os.makedirs(tokens_folder, exist_ok=True)
+
+    # Determine which token file to use
+    token_path = os.path.join(tokens_folder, token_filename) if token_filename else cfg["GOOGLE_TOKEN_PATH"]
+
     creds = None
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, cfg["GOOGLE_CALENDAR_SCOPES"])
 
-    # Load existing token if it exists
-    if os.path.exists(config["GOOGLE_TOKEN_PATH"]):
-        creds = Credentials.from_authorized_user_file(
-            config["GOOGLE_TOKEN_PATH"], config["GOOGLE_CALENDAR_SCOPES"]
-        )
-
-    # If no valid creds, run OAuth flow
+    # If no valid credentials, run OAuth flow
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                config["GOOGLE_CREDENTIALS_PATH"],
-                config["GOOGLE_CALENDAR_SCOPES"]
+                cfg["GOOGLE_CREDENTIALS_PATH"],
+                cfg["GOOGLE_CALENDAR_SCOPES"]
             )
-            creds = flow.run_local_server(port=0)
+            creds = flow.run_local_server(port=0)  # opens browser for authentication
 
         # Save the credentials for next run
-        with open(config["GOOGLE_TOKEN_PATH"], "w") as token_file:
+        with open(token_path, "w") as token_file:
             token_file.write(creds.to_json())
 
     service = build("calendar", "v3", credentials=creds)
     return service
+
 
 def test_auth():
     service = authenticate()
@@ -93,7 +101,7 @@ def get_all_busy_events(service, days_ahead=7):
     return all_events
 
 
-def find_free_time(service, days_ahead=7, min_duration_minutes=30):
+def find_free_time(service, days_ahead=7, min_duration_minutes=120):
     """
     Return list of free slots in the next `days_ahead` days across all calendars.
     """
