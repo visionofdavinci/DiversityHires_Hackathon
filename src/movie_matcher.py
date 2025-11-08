@@ -450,6 +450,9 @@ def filter_movie_schedules_by_free_slots(
     cineville_movie: dict,
     free_slots: List[Tuple[datetime, datetime]],
     buffer_minutes: int = 30,
+    max_end_overrun_minutes: int = 0,
+    max_start_advance_minutes: int = 0,
+    allow_start_inside: bool = False,
 ) -> dict:
     """
     Given a Cineville movie dict with:
@@ -526,10 +529,25 @@ def filter_movie_schedules_by_free_slots(
                 if debug:
                     print(f"[ShowtimeDebug]     comparing st_local={st_local} movie_end_local={movie_end_local} against slot_start={slot_start_local} slot_end={slot_end_local}")
 
-                if st_local >= slot_start_local and movie_end_local <= slot_end_local:
+                # Option: accept if the movie STARTS within the slot even if it ends after it
+                if allow_start_inside and (st_local >= slot_start_local and st_local <= slot_end_local):
                     fits_any_slot = True
                     if debug:
-                        print("[ShowtimeDebug]     => FITS slot")
+                        print("[ShowtimeDebug]     => FITS slot (start inside, end may overrun)")
+                    break
+
+                # Allow a small start advance (movie starts slightly before slot)
+                allowed_start_local = slot_start_local - timedelta(minutes=max_start_advance_minutes)
+                # Allow a small end overrun (movie ends slightly after slot)
+                allowed_end_local = slot_end_local + timedelta(minutes=max_end_overrun_minutes)
+
+                if debug:
+                    print(f"[ShowtimeDebug]     allowed_start={allowed_start_local} allowed_end={allowed_end_local} (start_adv={max_start_advance_minutes} end_overrun={max_end_overrun_minutes})")
+
+                if st_local >= allowed_start_local and movie_end_local <= allowed_end_local:
+                    fits_any_slot = True
+                    if debug:
+                        print("[ShowtimeDebug]     => FITS slot (within tolerances)")
                     break
 
             if debug and not fits_any_slot:
@@ -563,29 +581,17 @@ class GroupMovieMatcher:
         self.tmdb_client = tmdb_client
 
     def match_group(
-        self,
-        usernames: List[str],
-        days_ahead: int = 7,
-        limit_amsterdam: bool = True,
-        max_results: int = 20,
-        use_calendar: bool = True,
-        min_slot_minutes: int = 120,
-    ) -> List[GroupMatchedMovie]:
-        """
-        Main entry point:
-
-        - Build taste profiles for all usernames
-        - Fetch Cineville movies for next `days_ahead` days
-        - If use_calendar=True:
-            - Use calendar_matcher.find_common_available_times(...) to get
-              common free intervals
-            - Filter each movie's schedules to only showtimes that fit in those
-              intervals (duration + buffer)
-        - Predict per-user preference using RF
-        - Aggregate into group score
-        - Return top `max_results` movies
-        """
-        # 1) Build a Letterboxd + taste profile per user
+    self,
+    usernames: List[str],
+    days_ahead: int = 7,
+    limit_amsterdam: bool = True,
+    max_results: int = 20,
+    use_calendar: bool = True,
+    min_slot_minutes: int = 120,
+) -> List[GroupMatchedMovie]:
+        """Main entry point"""
+        
+        # 1) Build taste profiles
         profiles: List[UserTasteProfile] = []
         for u in usernames:
             u = u.strip()
@@ -603,7 +609,7 @@ class GroupMovieMatcher:
             print("[GroupMovieMatcher] No valid users, aborting.")
             return []
 
-        # 2) Calendar free slots
+        # 2) Get calendar free slots FIRST
         free_slots: Optional[List[Tuple[datetime, datetime]]] = None
         if use_calendar:
             try:
@@ -612,21 +618,33 @@ class GroupMovieMatcher:
                     min_duration_minutes=min_slot_minutes,
                 )
                 print(f"[GroupMovieMatcher] Found {len(free_slots)} common free slots.")
+                
+                # Debug: show the slot dates
+                if free_slots:
+                    print(f"   First slot: {free_slots[0][0]} - {free_slots[0][1]}")
+                    print(f"   Last slot: {free_slots[-1][0]} - {free_slots[-1][1]}")
             except Exception as e:
-                print(f"[GroupMovieMatcher] Error getting free slots, ignoring calendar: {e}")
-                free_slots = None
+                print(f"[GroupMovieMatcher] Error getting free slots: {e}")
+                return []
+        
+        if not free_slots:
+            print("[GroupMovieMatcher] No free slots found, aborting.")
+            return []
 
-        # 3) Get Cineville movies
-        cineville_movies = self.cineville_scraper.get_movies_with_schedule(
-            days_ahead=days_ahead,
-            limit_amsterdam=limit_amsterdam,
+        # 3) Get Cineville movies ONLY during those free slots ✅
+        print("\n[GroupMovieMatcher] Fetching Cineville movies for free slots...")
+        cineville_movies = self.cineville_scraper.get_movies_for_free_slots(
+            free_slots=free_slots,
+            limit_amsterdam=limit_amsterdam
         )
 
         if not cineville_movies:
-            print("[GroupMovieMatcher] No Cineville movies found.")
+            print("[GroupMovieMatcher] No Cineville movies found in free slots.")
             return []
 
-        # 4) For each movie, filter schedules by free slots and score
+        print(f"[GroupMovieMatcher] Found {len(cineville_movies)} movies")
+
+        # 4) Score and rank movies
         results: List[GroupMatchedMovie] = []
 
         for movie in cineville_movies:
@@ -636,15 +654,8 @@ class GroupMovieMatcher:
             if not title:
                 continue
 
-            # Filter schedules using calendar free slots
-            if free_slots:
-                filtered_schedules = filter_movie_schedules_by_free_slots(movie, free_slots)
-                if not filtered_schedules:
-                    # This movie never fits in any common free slot
-                    continue
-                # Work on a shallow copy so we don't mutate original movie
-                movie = dict(movie)
-                movie["schedules"] = filtered_schedules
+            # Now we don't need to filter schedules - they're already filtered!
+            # All showtimes are guaranteed to be in free slots
 
             # TMDb metadata
             try:
@@ -664,10 +675,9 @@ class GroupMovieMatcher:
             scores_list = list(per_user_scores.values())
             avg_score = sum(scores_list) / len(scores_list)
             worst = min(scores_list)
-            # Group score: average + penalty if someone really dislikes it
             group_score = avg_score + 0.3 * worst
 
-            # 5) Flatten showtimes (time + location) — *only those inside free slots*
+            # Flatten showtimes
             showtimes: List[ShowTime] = []
             for cinema, times in movie.get("schedules", {}).items():
                 for t in times:
@@ -690,7 +700,7 @@ class GroupMovieMatcher:
                 )
             )
 
-        # 6) Sort by group score and trim
+        # 5) Sort and return
         results.sort(key=lambda r: r.group_score, reverse=True)
         if max_results and max_results > 0:
             results = results[:max_results]
@@ -722,12 +732,16 @@ def _test_group_matcher():
     tmdb = TMDbClient(api_key=TMDB_API_KEY)
 
     matcher = GroupMovieMatcher(cineville, tmdb)
+    # Allow disabling calendar filtering for debugging via env var USE_CALENDAR (0/1)
+    use_cal_str = os.getenv("USE_CALENDAR", "1")
+    use_calendar_flag = False if use_cal_str in ("0", "false", "False") else True
+
     results = matcher.match_group(
         usernames=usernames,
         days_ahead=3,
         limit_amsterdam=True,
         max_results=10,
-        use_calendar=True,
+        use_calendar=use_calendar_flag,
         min_slot_minutes=120,
     )
 

@@ -81,10 +81,45 @@ def get_busy_events(service, calendar_id="primary", days_ahead=7):
         start_str = event['start'].get('dateTime', event['start'].get('date'))
         end_str = event['end'].get('dateTime', event['end'].get('date'))
 
-        start_dt = datetime.fromisoformat(start_str.split("+")[0])
-        end_dt = datetime.fromisoformat(end_str.split("+")[0])
+        def _parse_to_local_naive(iso_str: str):
+            if not iso_str:
+                return None
 
-        events.append((start_dt, end_dt))
+            # If it's a date (YYYY-MM-DD) -> treat as local midnight
+            if "T" not in iso_str:
+                try:
+                    d = datetime.fromisoformat(iso_str)
+                    return d
+                except Exception:
+                    pass
+
+            # Normalize Z to +00:00 so fromisoformat can parse it
+            try:
+                if iso_str.endswith('Z'):
+                    dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+                else:
+                    dt = datetime.fromisoformat(iso_str)
+            except Exception:
+                # Fallback: try removing fractional seconds or timezone noise
+                try:
+                    base = iso_str.split('+')[0].split('Z')[0]
+                    dt = datetime.fromisoformat(base)
+                except Exception:
+                    return None
+
+            # Convert to local timezone and drop tzinfo to produce naive local datetime
+            try:
+                local_dt = dt.astimezone().replace(tzinfo=None)
+            except Exception:
+                # If astimezone fails (dt naive), just strip tzinfo
+                local_dt = dt.replace(tzinfo=None)
+            return local_dt
+
+        start_dt = _parse_to_local_naive(start_str)
+        end_dt = _parse_to_local_naive(end_str)
+
+        if start_dt and end_dt:
+            events.append((start_dt, end_dt))
 
     return events
 
