@@ -1,0 +1,76 @@
+# Core
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Google Calendar
+google-api-python-client==2.108.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.1.0
+
+# WhatsApp (Twilio)
+twilio==8.11.0
+
+# Web Scraping
+beautifulsoup4==4.12.2
+requests==2.31.0
+selenium==4.15.2
+#lxml==4.9.3
+
+# Database (provided by hackathon)
+pymongo==4.6.0
+
+# AI/ML (provided by hackathon)
+openai==1.6.1
+
+# Utilities
+pytz==2023.3
+python-dateutil==2.8.2
+
+# Development
+jupyter==1.0.0
+ipykernel==6.27.1
+pytest==7.4.3
+
+
+# # .gitignore
+# # Environment
+# venv/
+# env/
+# .env
+# *.env
+# !.env.example
+
+# # Credentials
+# config/google_credentials.json
+# config/token.pickle
+
+# # Python
+# __pycache__/
+# *.py[cod]
+# *$py.class
+# *.so
+# .Python
+# *.egg-info/
+# dist/
+# build/
+
+# # Jupyter
+# .ipynb_checkpoints/
+# *.ipynb_checkpoints
+
+# # IDE
+# .vscode/
+# .idea/
+# *.swp
+# *.swo
+
+# # OS
+# .DS_Store
+# Thumbs.db
+
+# # Data
+# data/*.json
+# !data/mock_*.json
+
+# # Logs
+# *.log
