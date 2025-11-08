@@ -1,11 +1,18 @@
 # Core
 python-dotenv==1.0.0
 pyyaml==6.0.1
+numpy == 2.3.4
+pandas==2.2.2
 
 # Google Calendar
 google-api-python-client==2.108.0
 google-auth-httplib2==0.1.1
 google-auth-oauthlib==1.1.0
+
+joblib==1.5.2 
+scikit-learn==1.7.2 
+scipy==1.16.3 
+threadpoolctl==3.6.0
 
 # WhatsApp (Twilio)
 twilio==8.11.0
@@ -14,6 +21,7 @@ twilio==8.11.0
 beautifulsoup4==4.12.2
 requests==2.31.0
 selenium==4.15.2
+feedparser>=6.0.0
 #lxml==4.9.3
 
 # Database (provided by hackathon)

@@ -18,6 +18,7 @@ An AI agent that autonomously organizes movie nights by:
 - Polling your WhatsApp group
 - Sending confirmations with meeting details
 + (optionally) Books tickets
++ (GOD HELP US GET HERE) Movie recommendation based on description/vibe 
 
 Why it's cool: Eliminates the "what do we do tonight" paralysis
 
@@ -111,17 +112,17 @@ movie-night-orchestrator/
 
 ## **Ioana: Movies (Cineville + Letterboxd + Matching)** 
 
-- [ ] **Investigate Cineville**
+- [x] **Investigate Cineville**
   - Open https://www.cineville.nl/agenda
   - Open Browser DevTools → Network tab
   - Look for API calls (JSON responses)
   - **Decision:** API exists? → use it. No API? → scrape HTML
-- [ ] **Create `src/cineville_scraper.py`**
+- [x] **Create `src/cineville_scraper.py`**
   - If API: implement API calls
   - If no API: implement BeautifulSoup scraper
   - Create mock data fallback
   - Test with real Cineville website
-- [ ] **Create `src/letterboxd_integration.py`**
+- [x] **Create `src/letterboxd_integration.py`**
   - Method 1: Scrape public profile
   - Method 2: Manual input fallback
   - Test with your own Letterboxd username
