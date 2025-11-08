@@ -1,6 +1,6 @@
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
-from src.whatsapp_bot import send_poll, register_vote, send_confirmation
+from old_whatsapp.whatsapp_bot import send_poll, register_vote, send_confirmation
 
 app = Flask(__name__)
 
