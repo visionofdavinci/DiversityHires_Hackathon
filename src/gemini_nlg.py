@@ -49,33 +49,61 @@ def generate_natural_response(parsed_data: dict, recommendations: list = None) -
         model = genai.GenerativeModel('gemini-2.0-flash-lite')
         
         # Build context for Gemini
+        participants = parsed_data.get('participants', [])
+        date = parsed_data.get('date', 'soon')
+        mood = parsed_data.get('mood', 'any genre')
+        
         context = f"""You are a friendly movie night assistant helping friends plan their outing.
 
 User requested:
-- Participants: {', '.join(parsed_data.get('participants', [])) or 'not specified'}
-- Date: {parsed_data.get('date') or 'not specified'}
-- Mood: {parsed_data.get('mood') or 'not specified'}
+- Participants: {', '.join(participants) if participants else 'not specified'}
+- Date: {date}
+- Mood: {mood}
 """
         
         if recommendations and len(recommendations) > 0:
+            # Get top 3 movies
             top_movies = recommendations[:3]
-            context += f"\n\nTop recommendations found:\n"
+            context += f"\n\nTop {len(top_movies)} recommendations based on everyone's availability:\n\n"
+            
             for i, movie in enumerate(top_movies, 1):
                 title = movie.get('title', 'Unknown')
                 score = movie.get('group_score', 0)
-                showtimes_count = len(movie.get('showtimes', []))
-                context += f"{i}. {title} (score: {score:.1f}, {showtimes_count} showtimes)\n"
+                showtimes = movie.get('showtimes', [])
+                
+                # Get unique cinemas for this movie
+                cinemas = {}
+                for showtime in showtimes:
+                    cinema = showtime.get('cinema', 'Unknown')
+                    time = showtime.get('start', '')
+                    if cinema not in cinemas:
+                        cinemas[cinema] = []
+                    cinemas[cinema].append(time)
+                
+                context += f"{i}. {title}\n"
+                context += f"   - Group Score: {score:.1f}\n"
+                context += f"   - Available at {len(cinemas)} cinema(s) with {len(showtimes)} total showtimes\n"
+                
+                # Show first 2 cinemas as examples
+                shown_cinemas = list(cinemas.items())[:2]
+                for cinema, times in shown_cinemas:
+                    context += f"   - {cinema}: {len(times)} showing(s)\n"
+                
+                if len(cinemas) > 2:
+                    context += f"   - ...and {len(cinemas) - 2} more cinema(s)\n"
+                context += "\n"
         else:
             context += "\n\nNo recommendations found yet."
         
         prompt = f"""{context}
 
-Generate a brief, enthusiastic response (2-3 sentences max) that:
-1. Acknowledges their request
-2. Mentions the top movie recommendation if available
-3. Sounds natural and friendly
+Generate a brief, enthusiastic response (3-4 sentences) that:
+1. Acknowledges their request for {date} with {', '.join(participants) if participants else 'the group'}
+2. Mentions ALL 3 movie recommendations by name
+3. Highlights that these showtimes work for everyone's calendars
+4. Sounds natural and friendly
 
-Do NOT use phrases like "Okay! I've set up..." - be more conversational.
+Do NOT list all showtimes - just mention the movies and that there are multiple options.
 Response:"""
         
         response = model.generate_content(prompt)
@@ -93,13 +121,26 @@ def fallback_response(parsed_data: dict, recommendations: list = None) -> str:
     mood = parsed_data.get("mood")
     
     if recommendations and len(recommendations) > 0:
-        top_movie = recommendations[0].get('title', 'a great movie')
-        if participants and date:
-            return f"Perfect! How about watching {top_movie} {date} with {', '.join(participants)}? 🎬"
-        elif participants:
-            return f"Great! I found {top_movie} for you and {', '.join(participants)} to watch together! 🍿"
+        # Get top 3 movies
+        top_3 = recommendations[:3]
+        movie_titles = [m.get('title', 'a movie') for m in top_3]
+        
+        if len(movie_titles) == 1:
+            movies_text = movie_titles[0]
+        elif len(movie_titles) == 2:
+            movies_text = f"{movie_titles[0]} or {movie_titles[1]}"
         else:
-            return f"I found some great options! Top pick: {top_movie} 🎥"
+            movies_text = f"{movie_titles[0]}, {movie_titles[1]}, or {movie_titles[2]}"
+        
+        # Count total showtimes
+        total_showtimes = sum(len(m.get('showtimes', [])) for m in top_3)
+        
+        if participants and date:
+            return f"Perfect! I found 3 great options for {date}: {movies_text}. All {total_showtimes} showtimes work with everyone's calendars! 🎬"
+        elif participants:
+            return f"Great! Top picks for {', '.join(participants)}: {movies_text} ({total_showtimes} available showtimes) 🍿"
+        else:
+            return f"Here are your top 3: {movies_text}. {total_showtimes} showtimes available! 🎥"
     else:
         parts = []
         if participants:
@@ -110,6 +151,6 @@ def fallback_response(parsed_data: dict, recommendations: list = None) -> str:
             parts.append(f"in the mood for {mood}")
         
         if parts:
-            return f"Got it! Looking for movies {' '.join(parts)} 🔍"
+            return f"Got it! Looking for movies {' '.join(parts)}... 🔍"
         else:
-            return "What kind of movie are you looking for? Tell me more! 🎬"
+            return "What kind of movie are you looking for? Tell me the participants, date, and mood! 🎬"
