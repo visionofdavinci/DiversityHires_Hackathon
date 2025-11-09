@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { api } from '@/services/api'
 import { Message } from '@/lib/types'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // Agent action types
 type AgentAction = {
   type: 'suggestion' | 'data_fetch' | 'navigation' | 'filter'
@@ -50,14 +52,16 @@ function extractUsernames(messages: Message[]): string[] {
 
 // Call your Flask backend's Gemini-powered /chat endpoint
 async function queryGeminiBackend(userMessage: string): Promise<any> {
-  const response = await fetch('http://localhost:5000/chat', {
+  const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       message: userMessage
-    })
+    }),
+    // Add timeout
+    signal: AbortSignal.timeout(30000)
   });
 
   if (!response.ok) {
@@ -169,3 +173,6 @@ export async function POST(req: Request) {
     );
   }
 }
+
+// Prevent this route from being pre-rendered at build time
+export const dynamic = 'force-dynamic';
