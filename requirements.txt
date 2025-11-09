@@ -38,6 +38,8 @@ python-dateutil==2.8.2
 jupyter==1.0.0
 ipykernel==6.27.1
 pytest==7.4.3
+fastapi==0.95.2
+uvicorn==0.22.0
 
 # Calendar API
 python-dotenv>=1.0.0
