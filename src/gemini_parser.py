@@ -9,6 +9,12 @@ from functools import wraps
 # Load environment variables
 load_dotenv('../config/.env')
 
+GEMINI_MODELS = [
+    'gemini-2.0-flash-lite',      # 30 RPM - highest limits
+    'gemini-2.0-flash',           # 15 RPM - good backup
+    'gemini-2.5-flash-lite',      # 15 RPM - another backup
+]
+
 # Rate limiting decorator for Gemini (60 requests per minute)
 def rate_limit(calls_per_minute=50):
     min_interval = 60.0 / calls_per_minute
@@ -77,67 +83,78 @@ def parse_with_gemini(user_message: str) -> dict:
     """
     Parse using Google Gemini API
     """
-    try:
-        import google.generativeai as genai
-        
-        # Configure Gemini (do this once)
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            print("Gemini API key not found")
-            return None
-            
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-lite')
-        
-        prompt = f"""
-        You are a helpful assistant that extracts structured information from movie night requests.
-        
-        Extract the following information from this user message and return ONLY valid JSON:
-        - participants: list of usernames or names mentioned
-        - date: string representing the date or day mentioned (e.g., "friday", "this weekend")
-        - mood: string representing the preferred mood or genre
-        
-        Important: Return ONLY the JSON object, no other text.
-        
-        User message: "{user_message}"
-        """
-        
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        
-        print(f"Gemini raw response: {text}")  # Debugging
-        
-        # Clean the response (remove markdown code blocks if present)
-        if text.startswith('```json'):
-            text = text[7:]
-        if text.endswith('```'):
-            text = text[:-3]
-        text = text.strip()
-        
-        # Parse JSON
-        data = json.loads(text)
-        
-        # Validate structure
-        if not isinstance(data, dict):
-            return None
-            
-        # Ensure required fields exist
-        if 'participants' not in data:
-            data['participants'] = []
-        if 'date' not in data:
-            data['date'] = None
-        if 'mood' not in data:
-            data['mood'] = None
-            
-        return data
-        
-    except json.JSONDecodeError as e:
-        print(f"Failed to parse Gemini JSON response: {e}")
-        print(f"Raw response was: {text}")
-        return None
-    except Exception as e:
-        print(f"Gemini API error: {e}")
-        return None
+    for model_name in GEMINI_MODELS:
+            try:
+                import google.generativeai as genai
+                
+                api_key = os.getenv("GEMINI_API_KEY")
+                if not api_key:
+                    print("Gemini API key not found")
+                    continue
+                    
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                
+                prompt = f"""
+                You are a helpful assistant that extracts structured information from movie night requests.
+                
+                Extract the following information from this user message and return ONLY valid JSON:
+                - participants: list of usernames or names mentioned
+                - date: string representing the date or day mentioned (e.g., "friday", "this weekend")
+                - mood: string representing the preferred mood or genre
+                
+                Important: Return ONLY the JSON object, no other text.
+                
+                User message: "{user_message}"
+                """
+                
+                print(f"Trying model: {model_name}")
+                response = model.generate_content(prompt)
+                text = response.text.strip()
+                
+                print(f"Gemini raw response: {text}")
+                
+                # Clean the response
+                if text.startswith('```json'):
+                    text = text[7:]
+                if text.endswith('```'):
+                    text = text[:-3]
+                text = text.strip()
+                
+                # Parse JSON
+                data = json.loads(text)
+                
+                # Validate structure
+                if not isinstance(data, dict):
+                    continue  # Try next model
+                    
+                # Ensure required fields exist
+                if 'participants' not in data:
+                    data['participants'] = []
+                if 'date' not in data:
+                    data['date'] = None
+                if 'mood' not in data:
+                    data['mood'] = None
+                    
+                print(f"Success with model: {model_name}")
+                return data
+                
+            except Exception as e:
+                error_msg = str(e).lower()
+                print(f"Model {model_name} failed: {e}")
+                
+                # If it's a rate limit, try next model
+                if any(limit_word in error_msg for limit_word in ['quota', 'limit', 'rate', 'exceeded']):
+                    print(f"Rate limit hit on {model_name}, trying next model...")
+                    continue  # Try next model in the list
+                else:
+                    # For other errors, also try next model
+                    continue
+    
+    # All models failed
+    print("All Gemini models failed")
+    return None
+
 
 def parse_user_request(user_message: str) -> dict:
     """
