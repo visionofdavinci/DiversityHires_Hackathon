@@ -23,6 +23,7 @@ Click Variables tab, add these:
 ```env
 FLASK_SECRET_KEY=generate-a-random-string-here
 FLASK_ENV=production
+GEMINI_API_KEY=your-gemini-api-key-here
 FRONTEND_URL=https://your-frontend-will-go-here.vercel.app
 ```
 

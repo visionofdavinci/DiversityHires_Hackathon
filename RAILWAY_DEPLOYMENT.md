@@ -46,7 +46,10 @@ GOOGLE_TOKENS_FOLDER=/app/tokens
 # Frontend URL (update after deploying frontend)
 FRONTEND_URL=https://your-frontend.vercel.app
 
-# Optional - AI Features
+# AI APIs (Required for NLG features)
+GEMINI_API_KEY=your-gemini-api-key
+
+# Optional - Additional AI Features
 OPENAI_API_KEY=your-openai-api-key
 
 # Optional - TMDb (for movie metadata)
@@ -221,6 +224,7 @@ Tips:
 - [x] `GOOGLE_CREDENTIALS_PATH`
 - [x] `GOOGLE_TOKENS_FOLDER`
 - [x] `FRONTEND_URL`
+- [x] `GEMINI_API_KEY` (required for NLG)
 - [ ] `OPENAI_API_KEY` (optional)
 - [ ] `TMDB_API_KEY` (optional)
 
