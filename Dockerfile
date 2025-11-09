@@ -22,7 +22,7 @@ EXPOSE 5000
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
-ENV PORT=5000
 
 # Run the Flask application
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
+# Railway provides PORT env var, default to 5000 if not set
+CMD gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 2 --timeout 120 app:app
