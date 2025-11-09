@@ -140,6 +140,22 @@ def generate_summary(data: dict) -> str:
 # Initialize services
 scraper = CinevilleScraper()
 
+@app.route("/")
+def home():
+    """Health check endpoint"""
+    return jsonify({
+        "status": "ok",
+        "message": "Movie Matcher API is running",
+        "version": "1.0.0",
+        "endpoints": {
+            "recommendations": "/recommendations",
+            "chat": "/chat",
+            "calendar_auth": "/calendar/auth",
+            "letterboxd": "/api/letterboxd",
+            "cineville": "/cineville/upcoming"
+        }
+    }), 200
+
 @app.route("/recommendations", methods=["POST"])
 def recommendations():
     data = request.get_json() or {}
