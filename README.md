@@ -3,228 +3,197 @@ This is the repository for the PROSUS AI Hackathon
 
 Team Name: Diversity Hires
 
-Short description: 
-An AI agent that autonomously organizes movie nights by:
-- Detecting free time in your calendar
-- Finding personalized movies from Cineville based on your Letterboxd
-- Polling your WhatsApp group
-- Sending confirmations with meeting details
+ **[Try the Live Demo](https://diversity-hires-hackathon-3x1r.vercel.app/)**
 
-Idea:  Movie Night Orchestrator
+## Movie Night Orchestrator
 
-An AI agent that autonomously organizes movie nights by:
-- Detecting free time in your calendar
-- Finding personalized movies from Cineville based on your Letterboxd
-- Polling your WhatsApp group
-- Sending confirmations with meeting details
-+ (optionally) Books tickets
-+ (GOD HELP US GET HERE) Movie recommendation based on description/vibe 
+### Short Description
+An intelligent AI-powered agent that transforms movie planning from hours of group chat chaos into seconds of natural conversation. Simply tell the agent what you want, and it handles everything - from understanding your preferences to booking the perfect movie night.
 
-Why it's cool: Eliminates the "what do we do tonight" paralysis
+### AI Methods & Technology Stack
+
+**Natural Language Understanding:**
+- **Google Gemini AI** for parsing natural language requests
+  - Intent detection from conversational input
+  - Entity extraction (participants, dates, mood/genre preferences)
+  - Contextual understanding of temporal expressions ("this Friday", "tonight", "weekend")
+- **Gemini NLG** for generating natural, context-aware responses
+
+**Personalization Engine:**
+- **Web scraping** of Letterboxd profiles to build user taste graphs
+- **Collaborative filtering** for group compatibility scoring
+- **TMDb API integration** for enriched movie metadata
+- **Adaptive learning** from group viewing history and preferences
+- **Mood-based filtering** using genre mapping and sentiment analysis
+
+**Intelligent Scheduling:**
+- **Google Calendar API** integration for automated availability detection
+- **Calendar matching algorithm** to find optimal time slots across multiple users
+- **Free time detection** with configurable minimum duration thresholds
+- **OAuth 2.0** secure authentication flow
+
+**Recommendation Algorithm:**
+- **Hybrid recommendation system** combining:
+  - Content-based filtering (genres, directors, themes)
+  - Collaborative filtering (group compatibility)
+  - Temporal constraints (showtime availability)
+  - Preference weighting per user
+- **Random Forest classifier** for mood-to-genre prediction
+- **Multi-criteria scoring** (individual scores + group harmony)
+- **Real-time cinema data** scraped from Cineville Amsterdam
+
+**Full-Stack Architecture:**
+- **Backend:** Python Flask with microservices architecture
+  - Calendar agent, Movie matcher, Orchestrator modules
+  - RESTful API design
+- **Frontend:** Next.js 14 with TypeScript
+  - Server-side rendering for optimal performance
+  - Real-time updates via API polling
+  - Responsive UI with Tailwind CSS
+- **Deployment:** Railway (backend) + Vercel (frontend)
+  - Production-ready with environment-based configuration
+  - CORS-enabled for secure cross-origin requests
+
+### Why It's Innovative
+**Eliminates the "what do we do tonight?" paralysis** by combining multiple AI techniques:
+- Natural language processing removes the friction of structured inputs
+- Personalization ensures recommendations everyone will enjoy
+- Automated scheduling removes the coordination overhead
+- End-to-end orchestration means zero manual work
+
+### Key Features
+✅ **Natural language input** - just chat with the AI  
+✅ **Multi-user preference analysis** - learns from Letterboxd viewing history  
+✅ **Automated calendar integration** - finds when everyone is free  
+✅ **Real-time cinema data** - actual showtimes from Cineville Amsterdam  
+✅ **Smart group scoring** - balances individual preferences  
+✅ **Mood-based filtering** - matches recommendations to your vibe  
+✅ **Conversational AI responses** - natural, helpful interactions
 
 
-Structure of project:
+## Project Structure
 
 ```text
-
-movie-night-orchestrator/
+DiversityHires_Hackathon/
 │
-├── README.md                          # Project documentation
-├── requirements.txt                   # Python dependencies
-├── .gitignore                        # Git ignore file
-├── main.py                           # Main entry point
+├── README.md                               # Project documentation
+├── requirements.txt                        # Python dependencies
+├── .gitignore                             # Git ignore file
+├── .env                                   # Environment variables (DO NOT COMMIT!)
+├── .env.example                           # Example env file
+├── credentials.json                       # Google OAuth credentials (DO NOT COMMIT!)
 │
-├── config/                           # Configuration files
-│   ├── .env                          # API keys (DO NOT COMMIT!)
-│   ├── .env.example                  # Example env file (commit this)
-│   ├── google_credentials.json       # Google Calendar credentials (DO NOT COMMIT!)
-│   └── config.yaml                   # App configuration (optional)
+├── app.py                                 # Flask backend API server
+├── main.py                                # Main entry point (CLI)
+├── webhook.py                             # WhatsApp webhook handler
+├── test_calendar_fix.py                   # Calendar testing script
+├── main_test.ipynb                        # Testing notebook
 │
-├── src/                              # Source code
-│   ├── __init__.py                   # Makes src a package
+├── Dockerfile                             # Docker configuration for Railway
+├── railway.json                           # Railway deployment config
+│
+│
+├── src/                                   # Backend source code
+│   ├── ai_agent.py                        # AI agent orchestration
+│   ├── api_server.py                      # API server utilities
+│   ├── calendar_agent.py                  # Google Calendar integration
+│   ├── calendar_matcher.py                # Calendar free time matching
+│   ├── cineville_scraper.py               # Cineville cinema scraper
+│   ├── gemini_nlg.py                      # Gemini natural language generation
+│   ├── gemini_parser.py                   # Gemini NLP parser
+│   ├── openai_parser.py                   # OpenAI parser fallback
+│   ├── letterboxd_integration.py          # Letterboxd profile scraper
+│   ├── movie_matcher.py                   # Movie matching algorithm + TMDb
+│   ├── group_history.py                   # Group preference tracking
+│   ├── mood_filter.py                     # Mood-based filtering
+│   ├── orchestrator.py                    # Main orchestration logic
+│   ├── poll_manager.py                    # Poll management
+│   ├── test_group_history_mood_filtering.py  # Testing script
 │   │
-│   ├── calendar_agent.py             # Calendar integration 
-│   ├── cineville_scraper.py          # Cineville scraping
-│   ├── letterboxd_integration.py     # Letterboxd integration 
-│   ├── movie_matcher.py              # Movie matching logic 
-│   ├── whatsapp_bot.py               # WhatsApp messaging 
-│   ├── orchestrator.py               # Main orchestration brain 
-|   ├── group_history.py              # Track & learn from choices
-|   ├── mood_filter.py                # Mood-based recommendations
-|   ├── test_new_features.py          # Test script
-│   │
-│   └── utils/                        # Utility functions
-│       ├── __init__.py
-│       ├── time_utils.py             # Time/date helpers
-│       └── config_loader.py          # Config loading utilities
+│   └── utils/                             # Utility modules
+│       ├── config_loader.py               # Configuration loader
+│       └── time_utils.py                  # Time/date helpers
 │
-├── notebooks/                        # Jupyter notebooks for testing
-│   ├── 01_calendar_test.ipynb        # Test calendar integration
-│   ├── 02_cineville_test.ipynb       # Test Cineville scraping
-│   ├── 03_letterboxd_test.ipynb      # Test Letterboxd integration
-│   ├── 04_whatsapp_test.ipynb        # Test WhatsApp bot
-│   ├── 05_movie_matcher_test.ipynb   # Test movie matching
-│   └── 06_full_demo.ipynb            # Full integration demo
+├── scripts/                               # Utility scripts
+│   ├── create_token_for_user.py           # Create OAuth tokens
+│   ├── find_common_free_time.py           # Calendar availability finder
+│   ├── generate_oauth_env.py              # Generate OAuth env variables
+│   └── test_calendar_auth.py              # Test calendar authentication
 │
-├── data/                             # Data files
-│   ├── mock_showtimes.json           # Mock Cineville data (fallback)
-│   ├── mock_letterboxd.json          # Mock preferences (fallback)
-│   └── user_preferences.json         # Saved user preferences
+├── data/                                  # Data files
+│   ├── cineville_nextjs_data.json         # Cineville data export
+│   ├── mock_letterboxd.json               # Mock Letterboxd data
+│   └── groups/                            # Group preference data
+│       ├── noorsterre_sannebr_visionofdavinci_history.json
+│       └── noorsterre_sannebr_visionofdavinci_preferences.json
 │
-├── tests/                            # Unit tests (optional, if time)
-│   ├── __init__.py
-│   ├── test_calendar.py
-│   ├── test_cineville.py
-│   ├── test_letterboxd.py
-│   └── test_whatsapp.py
+├── tokens/                                # Google Calendar OAuth tokens (DO NOT COMMIT!)
+│   ├── ioana.json
+│   ├── noor.json
+│   └── sanne.json
 │
+├── notebooks/                             # Jupyter notebooks for testing
+│   └── ai_parser_test.ipynb               # AI parser testing
 │
-└── deployment/                       # Deployment files (FIGURE OUT)
-    ├── Dockerfile                    # Docker configuration (optional)
-    ├── deploy.sh                     # Deployment script
-    └── requirements-prod.txt         # Production dependencies
+├── old_whatsapp/                          # Legacy WhatsApp implementation
+│   ├── og_whatsapp_bot.py
+│   ├── whatsapp_bot.py
+│   └── whatsapp_test.ipynb
+│
+└── frontend/                              # Next.js frontend application
+    ├── package.json                       # Node dependencies
+    ├── tsconfig.json                      # TypeScript config
+    ├── next.config.ts                     # Next.js config
+    ├── tailwind.config.js                 # Tailwind CSS config
+    ├── postcss.config.js                  # PostCSS config
+    ├── eslint.config.mjs                  # ESLint config
+    ├── .env.local                         # Frontend env variables
+    ├── README.md                          # Frontend documentation
+    │
+    ├── public/                            # Static assets
+    │
+    ├── src/                               # Frontend source code
+    │   ├── app/                           # Next.js app router
+    │   │   ├── layout.tsx                 # Root layout
+    │   │   ├── page.tsx                   # Home page (chat interface)
+    │   │   ├── globals.css                # Global styles
+    │   │   │
+    │   │   ├── api/                       # API route handlers
+    │   │   │   ├── calendar/route.ts      # Calendar API proxy
+    │   │   │   ├── chat/route.ts          # Chat API proxy
+    │   │   │   ├── cineville/route.ts     # Cineville API proxy
+    │   │   │   └── letterboxd/route.ts    # Letterboxd API proxy
+    │   │   │
+    │   │   ├── calendar/                  # Calendar page
+    │   │   │   └── page.tsx
+    │   │   ├── cineville/                 # Cineville page
+    │   │   │   └── page.tsx
+    │   │   └── letterboxd/                # Letterboxd page
+    │   │       └── page.tsx
+    │   │
+    │   ├── components/                    # React components
+    │   │   ├── CalendarView.tsx           # Calendar display
+    │   │   ├── chat.tsx                   # Main chat interface
+    │   │   ├── chat-message.tsx           # Chat message component
+    │   │   ├── ChatHistory.tsx            # Chat history
+    │   │   ├── CinevilleRecommendations.tsx  # Movie recommendations
+    │   │   ├── LetterboxdProfile.tsx      # Letterboxd profile display
+    │   │   ├── movie-card.tsx             # Movie card component
+    │   │   ├── nav-layout.tsx             # Navigation layout
+    │   │   └── ui/                        # UI components
+    │   │       └── button.tsx
+    │   │
+    │   ├── lib/                           # Utilities
+    │   │   ├── types.ts                   # TypeScript types
+    │   │   └── utils.ts                   # Helper functions
+    │   │
+    │   ├── services/                      # API services
+    │   │   └── api.ts                     # Backend API client
+    │   │
+    │   └── types/                         # Type definitions
+    │       └── index.ts
+    │
+    └── data/                              # Frontend data
+        └── groups/                        # Group data cache
 
 ```
-
-## **Sanne: Calendar + Orchestrator** 
-
-- [x] Setup Google Calendar API credentials
-- [x] Create `src/calendar_agent.py`
-- [x] Test calendar authentication
-- [x] Test free time detection
-- [x] Create `src/utils/time_utils.py` - time helper functions
-- [x] Create `src/utils/config_loader.py` - load .env files
-- [ ] Start `src/orchestrator.py` skeleton (wait for others' APIs)
-- [x] Create `notebooks/01_calendar_test.ipynb` - document tests
-- [ ] Help with integration when others are ready
-- [ ] Complete `src/orchestrator.py` - wire everything together
-- [ ] Add proactive checking logic (when to suggest movie night)
-- [ ] Add error handling
-- [ ] Help with final testing
-- [ ] Work on `main.py` - command line interface
-
-**Files:**
-- `src/calendar_agent.py` 
-- `src/utils/time_utils.py`
-- `src/utils/config_loader.py`
-- `src/orchestrator.py` (collaborate with team)
-- `notebooks/01_calendar_test.ipynb`
-- `main.py`
-
----
-
-## **Ioana: Movies (Cineville + Letterboxd + Matching)** 
-
-- [x] **Investigate Cineville**
-  - Open https://www.cineville.nl/agenda
-  - Open Browser DevTools → Network tab
-  - Look for API calls (JSON responses)
-  - **Decision:** API exists? → use it. No API? → scrape HTML
-- [x] **Create `src/cineville_scraper.py`**
-  - If API: implement API calls
-  - If no API: implement BeautifulSoup scraper
-  - Create mock data fallback
-  - Test with real Cineville website
-- [x] **Create `src/letterboxd_integration.py`**
-  - Method 1: Scrape public profile
-  - Method 2: Manual input fallback
-  - Test with your own Letterboxd username
-- [x] **Create `src/movie_matcher.py`**
-  - Combine Cineville + Letterboxd
-  - Scoring algorithm (rate movies by preference)
-  - Get TMDb API key (free, 5 minutes)
-  - Fetch movie details from TMDb
-- [ ] **Create mock data files:**
-  - `data/mock_showtimes.json`
-  - `data/mock_letterboxd.json`
-- [ ] Polish matching algorithm
-- [x] Test with different Letterboxd profiles
-- [ ] Handle edge cases (no movies found, etc.)
-- [ ] Integration with orchestrator
-- [ ] Create `notebooks/02_cineville_test.ipynb`, `03_letterboxd_test.ipynb`, `05_movie_matcher_test.ipynb`
-
-**Files:**
-- `src/cineville_scraper.py`
-- `src/letterboxd_integration.py`
-- `src/movie_matcher.py`
-- `data/mock_showtimes.json`
-- `data/mock_letterboxd.json`
-- `notebooks/02_cineville_test.ipynb`
-- `notebooks/03_letterboxd_test.ipynb`
-- `notebooks/05_movie_matcher_test.ipynb`
-
----
-
-## **Noor: WhatsApp + Integration** 
-
-- [x] **Setup Twilio WhatsApp**
-  - Sign up: https://www.twilio.com/try-twilio
-  - Get Account SID + Auth Token
-  - Join WhatsApp sandbox (send "join <code>")
-  - Get teammates to join sandbox too
-  - Add credentials to `config/.env`
-- [x] **Create `src/whatsapp_bot.py`**
-  - Implement `send_message()`
-  - Implement `send_movie_poll()`
-  - Implement `register_vote()`
-  - Implement `send_confirmation()`
-  - Test sending yourself a message
-- [ ] **Test WhatsApp polling flow**
-  - Send test poll to yourself
-  - Manually reply with vote
-  - Test vote counting
-  - Test confirmation message
-
-- [ ] **Create group testing**
-  - Send poll to team WhatsApp group
-  - Test multi-person voting
-  - Fix any issues
-- [ ] **Help with orchestrator integration**
-  - Work with Person 1 to integrate WhatsApp into main flow
-- [ ] Add reminder functionality
-- [ ] Polish message formatting
-- [ ] Add emoji and better UX
-- [ ] Test edge cases (no votes, tie, etc.)
-- [ ] Integration testing with full team
-- [ ] Create `notebooks/04_whatsapp_test.ipynb`
-
-**Files:**
-- `src/whatsapp_bot.py`
-- `notebooks/04_whatsapp_test.ipynb`
-- Help with `src/orchestrator.py` (integration)
-
-## **Conversation flow example:**
-User: "Hey, find us a movie for tonight"
-Bot: "On it! Who's coming?"
-User: "Me, Alice, and Bob"
-
-Bot: "Perfect! Found 3 free time slots:
-     1. Today 20:00-23:00
-     2. Tomorrow 19:00-22:00  
-     3. Sunday 18:00-21:00
-     Which works best?"
-User: "1"
-
-Bot: "Analyzing your Letterboxd profiles...
-     This might take 30 sec..."
-
-Bot: "Found 5 perfect movies!
-     
-     1. Perfect Days (2023)
-        Group score: 9.2/10
-        You: 9.5 | Alice: 9.0 | Bob: 8.9
-        
-        EYE Filmmuseum @ 20:30
-        Rialto @ 21:00
-        
-        Why? "Everyone will love this drama. 
-        Based on Alice's love of Japanese cinema 
-        and your rating of Paterson 5★"
-        
-     2. The Zone of Interest (2024)
-        Group score: 8.8/10
-        ..."
-
-Bot: "Vote for your favorite! [Poll]"
-
----
