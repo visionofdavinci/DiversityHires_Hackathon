@@ -17,6 +17,10 @@ from src.movie_matcher import TMDbClient
 from src.group_history import GENRE_MAP
 from datetime import datetime, timedelta 
 from src.gemini_nlg import generate_natural_response
+from src.poll_manager import PollManager
+
+# Initialize poll manager
+poll_manager = PollManager()
 
 app = Flask(__name__)
 # Use a consistent secret key (in production, use environment variable)
@@ -142,7 +146,59 @@ def generate_summary(data: dict) -> str:
     else:
         return "I couldn’t find specific details in your message — could you rephrase?"
 
+# Add this helper function after the generate_summary function (around line 135)
 
+def parse_vote_with_gemini(user_message: str, poll_options: list) -> int:
+    """
+    Use Gemini to parse a vote from natural language.
+    Returns the option index (0-based) or -1 if cannot parse.
+    """
+    try:
+        import google.generativeai as genai
+        
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not found")
+        
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        
+        # Format options for the prompt
+        options_text = "\n".join([f"{i+1}. {opt['movie']}" for i, opt in enumerate(poll_options)])
+        
+        prompt = f"""The user is voting in a poll with these options:
+{options_text}
+
+The user said: "{user_message}"
+
+Which option are they voting for? Return ONLY the number (1, 2, or 3). 
+If they mentioned a movie name, return the corresponding number.
+If you cannot determine which option, return "0".
+
+Examples:
+- "I vote for option 2" → 2
+- "number 1" → 1
+- "I want to see Pavements" → (the number where Pavements is)
+- "let's go with the second one" → 2
+- "Pavements" → (the number where Pavements is)
+
+Return only the number, nothing else."""
+        
+        response = model.generate_content(prompt)
+        vote_num = response.text.strip()
+        
+        try:
+            option_index = int(vote_num) - 1  # Convert to 0-based index
+            if 0 <= option_index < len(poll_options):
+                return option_index
+            else:
+                return -1
+        except ValueError:
+            return -1
+            
+    except Exception as e:
+        print(f"Error parsing vote with Gemini: {e}")
+        return -1
 
 # Initialize services
 scraper = CinevilleScraper()
@@ -569,18 +625,55 @@ def parse_message():
 def chat():
     """
     Natural language movie recommendation endpoint.
-    
-    Accepts a user message like:
-      "Let's watch a movie this Friday with sanne and ioana. Mood: comedy."
-    
-    Parses it, maps participants to Letterboxd usernames, and returns recommendations.
+    Creates a poll with movie titles only (not individual showtimes).
+    Also handles natural language voting.
     """
     try:
         data = request.get_json() or {}
         user_input = data.get("message", "").strip()
+        active_poll_id = data.get("active_poll_id")  # Frontend sends this if there's an active poll
 
         if not user_input:
             return jsonify({"error": "No message provided"}), 400
+
+        # CHECK IF THIS IS A VOTE FOR AN ACTIVE POLL
+        if active_poll_id:
+            poll = data.get("poll")  # Frontend sends poll data
+            if poll:
+                poll_options = poll.get('options', [])
+                recommendations = poll.get('recommendations', [])
+                vote_index = parse_vote_with_gemini(user_input, poll_options)
+                
+                if vote_index >= 0:
+                    # User voted! Find movie details and announce winner
+                    voted_movie = poll_options[vote_index]['movie']
+                    movie_data = next((r for r in recommendations if r.get('title') == voted_movie), None)
+                    
+                    if movie_data and movie_data.get('showtimes'):
+                        first_showtime = movie_data['showtimes'][0]
+                        cinema = first_showtime.cinema
+                        time_str = first_showtime.start.strftime("%A at %H:%M")
+                        
+                        winner_message = f"🎉 Great choice! '{voted_movie}' wins with 3 votes!\n\n"
+                        winner_message += f"📍 Location: {cinema}\n"
+                        winner_message += f"🕐 Time: {time_str}\n\n"
+                        winner_message += f"✅ I've added this to everyone's calendar. See you there! 🎬"
+                    else:
+                        winner_message = f"🎉 Great choice! '{voted_movie}' wins with 3 votes!\n\n✅ I've added this to everyone's calendar. See you there! 🎬"
+                    
+                    return jsonify({
+                        "message": winner_message,
+                        "poll_complete": True,
+                        "winner": {"movie": voted_movie, "votes": 3},
+                        "poll": None
+                    }), 200
+                else:
+                    # Couldn't parse vote
+                    return jsonify({
+                        "message": "I couldn't understand your vote. Please try:\n- Saying the movie name (e.g., 'Bugonia')\n- Using a number (e.g., 'number 1' or 'option 2')",
+                        "vote_recorded": False,
+                        "poll": {"poll_id": active_poll_id, "options": poll_options}
+                    }), 200
 
         # 1. Parse the user message
         print(f"📝 Parsing message: {user_input}")
@@ -592,26 +685,56 @@ def chat():
                 "parsed": parsed
             }), 400
 
-        # 2. Map participants to Letterboxd usernames
+        # 2. Check for participants - USE GEMINI FOR CONVERSATIONAL RESPONSE
         participants = parsed.get("participants", [])
         if not participants:
-            return jsonify({
-                "error": "No participants found in your message",
-                "parsed": parsed,
-                "hint": "Try including names like 'with sanne and ioana'"
-            }), 400
+            try:
+                import google.generativeai as genai
+                
+                # Use GEMINI_API_KEY like in gemini_nlg.py
+                api_key = os.getenv("GEMINI_API_KEY")
+                if not api_key:
+                    raise ValueError("GEMINI_API_KEY not found")
+                
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-2.0-flash-lite')
+                
+                prompt = f"""You are a friendly movie recommendation assistant. The user said: "{user_input}"
+
+        This doesn't seem to be a complete movie request. Help them by:
+        1. If they're asking about a specific movie, tell them you can help find showtimes
+        2. If they're greeting you, greet back warmly and explain what you do
+        3. If they're asking what you can do, explain briefly
+        4. If it's unclear, gently guide them to provide: who's watching, when, and mood
+
+        Keep it natural, friendly, and under 3 sentences. Don't use the exact same phrases repeatedly."""
+                
+                response = model.generate_content(prompt)
+                conversational_response = response.text.strip()
+                
+                return jsonify({
+                    "message": conversational_response,
+                    "parsed": parsed,
+                    "recommendations": [],
+                    "poll": None
+                }), 200
+                
+            except Exception as e:
+                print(f"Gemini conversational error: {e}")
+                return jsonify({
+                    "message": "I'd love to help you find a movie! Just let me know who's watching, when, and what mood you're in.",
+                    "parsed": parsed,
+                    "recommendations": [],
+                    "poll": None
+                }), 200
         
-        # Map to Letterboxd usernames using USER_MAPPING
         letterboxd_usernames = []
         for participant in participants:
-            # Try exact match first (case-insensitive)
             mapped_name = None
             for key, value in USER_MAPPING.items():
                 if participant.lower() == key.lower():
                     mapped_name = value
                     break
-            
-            # If not found in mapping, use participant name as-is
             letterboxd_usernames.append(mapped_name or participant)
         
         print(f"👥 Mapped participants: {participants} -> {letterboxd_usernames}")
@@ -619,8 +742,6 @@ def chat():
         # 3. Extract other parameters
         mood = parsed.get("mood")
         date_str = parsed.get("date")
-        
-        # Calculate days_ahead based on date
         days_ahead = parse_date_to_days_ahead(date_str)
         print(f"📅 Date requested: {date_str} -> days_ahead={days_ahead}")
 
@@ -637,13 +758,42 @@ def chat():
             learn_from_history=True,
         )
 
-        # 5. Build response
-        #summary = generate_summary(parsed)
-        summary = generate_natural_response(
-            parsed_data=parsed,
-            recommendations=recommendations_result.get("recommendations", [])
-        )
+        recommendations = recommendations_result.get("recommendations", [])
+
+               # 5. Create fake poll data (no real poll manager)
+        poll_id = None
+        poll_data = None
         
+        if recommendations and len(recommendations) > 0:
+            top_3_movies = recommendations[:3]
+            poll_options = [
+                {
+                    'text': f"{m.get('title')} ({len(m.get('showtimes', []))} showtimes available)",
+                    'movie': m.get('title'),
+                    'showtime_count': len(m.get('showtimes', []))
+                }
+                for m in top_3_movies
+            ]
+            
+            poll_id = "fake_poll_123"
+            poll_data = {
+                "poll_id": poll_id,
+                "title": f"Movie Night - {date_str or 'Soon'}",
+                "options": poll_options,
+                "voted_count": 2,  # Fake: sanne and ioana "voted"
+                "total_participants": len(participants),
+                "recommendations": top_3_movies
+            }
+
+        # 6. Generate natural language response
+        if poll_id:
+            summary = f"Great! I've found some perfect matches for your movie night.\n\n📊 Vote for your favorite:"
+            for i, opt in enumerate(poll_data['options']):
+                summary += f"\n{i+1}. {opt['movie']} ({opt['showtime_count']} showtimes available)"
+            summary += f"\n\n✅ 2 out of {len(participants)} have already voted!"
+        else:
+            summary = generate_natural_response(parsed_data=parsed, recommendations=recommendations)
+
         return jsonify({
             "message": summary,
             "parsed": {
@@ -652,12 +802,395 @@ def chat():
                 "date": date_str,
                 "mood": mood
             },
-            "recommendations": recommendations_result.get("recommendations", []),
-            "group_history": recommendations_result.get("group_history", {})
+            "recommendations": recommendations,
+            "group_history": recommendations_result.get("group_history", {}),
+            "poll": poll_data
         }), 200
 
     except Exception as e:
         print(f"❌ Error in /chat route: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+        
+        # 6. Generate natural language response
+        # if poll_id:
+        #     # Use Gemini to generate natural poll introduction
+        #     try:
+        #         import google.generativeai as genai
+                
+        #         # Use GEMINI_API_KEY like in gemini_nlg.py
+        #         api_key = os.getenv("GEMINI_API_KEY")
+        #         if not api_key:
+        #             raise ValueError("GEMINI_API_KEY not found")
+                
+        #         genai.configure(api_key=api_key)
+        #         model = genai.GenerativeModel('gemini-2.0-flash-lite')
+                
+        #         # Build participant list naturally
+        #         if len(participants) > 1:
+        #             participant_list = ", ".join(participants[:-1]) + f" and {participants[-1]}"
+        #         else:
+        #             participant_list = participants[0]
+                
+        #         date_text = date_str if date_str else "soon"
+        #         mood_text = mood if mood else "any mood"
+                
+        #         # Get movie titles for the prompt
+        #         movie_titles = [opt['movie'] for opt in poll_data['options']]
+                
+        #         prompt = f"""You're helping organize a movie night. Generate a friendly, natural confirmation message.
+
+# Details:
+# - The user is going with: {participant_list}
+# - Date: {date_text}
+# - Mood: {mood_text}
+# - Top movie options: {', '.join(movie_titles)}
+
+# Create a warm, enthusiastic message that:
+# 1. Confirms the plan (YOU are watching with [others] on [date])
+# 2. Says you found great matches
+# 3. Asks which movie YOU'D like to see
+
+# Address the USER directly (use "you" and "your"). Don't greet anyone or use names in the opening. 
+# Keep it conversational and under 2 sentences. Vary your phrasing - don't be repetitive."""
+                
+#                 response = model.generate_content(prompt)
+#                 intro_message = response.text.strip()
+                
+#                 summary = intro_message
+#                 summary += f"\n\n📊 Vote for your favorite:"
+#                 for i, opt in enumerate(poll_data['options']):
+#                     summary += f"\n{i+1}. {opt['movie']} ({opt['showtime_count']} showtimes available)"
+#                 summary += f"\n\n✅ {poll_data['voted_count']} out of {poll_data['total_participants']} have already voted!"
+                
+#             except Exception as e:
+#                 print(f"Gemini poll message error: {e}")
+#                 # Fallback to simple message
+#                 if len(participants) > 1:
+#                     participant_names = "you, " + ", ".join(participants[:-1]) + f" and {participants[-1]}"
+#                 else:
+#                     participant_names = "you"
+                
+#                 date_text = date_str if date_str else "soon"
+#                 mood_text = f"in the mood for something {mood}" if mood else "ready for a movie"
+                
+#                 summary = f"Great! So we have {participant_names} watching a movie {date_text}, {mood_text}. "
+#                 summary += f"I've found some perfect matches! Which one would you like to see?"
+#                 summary += f"\n\n📊 Vote for your favorite:"
+#                 for i, opt in enumerate(poll_data['options']):
+#                     summary += f"\n{i+1}. {opt['movie']} ({opt['showtime_count']} showtimes available)"
+#                 summary += f"\n\n✅ {poll_data['voted_count']} out of {poll_data['total_participants']} have already voted!"
+#         else:
+#             # No poll - just show the NLG summary
+#             summary = generate_natural_response(
+#                 parsed_data=parsed,
+#                 recommendations=recommendations
+#             )
+
+#         return jsonify({
+#             "message": summary,
+#             "parsed": {
+#                 "participants": participants,
+#                 "letterboxd_usernames": letterboxd_usernames,
+#                 "date": date_str,
+#                 "mood": mood
+#             },
+#             "recommendations": recommendations,
+#             "group_history": recommendations_result.get("group_history", {}),
+#             "poll": poll_data
+#         }), 200
+
+#     except Exception as e:
+#         print(f"❌ Error in /chat route: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+    
+@app.route("/create-poll", methods=["POST"])
+def create_poll():
+    """
+    Create a poll from movie recommendations.
+    
+    Expected JSON:
+    {
+        "recommendations": [...],  // From /chat response
+        "participants": ["sanne", "noor", "ioana"],
+        "poll_title": "Movie Night - Friday Comedy"
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        recommendations = data.get("recommendations", [])
+        participants = data.get("participants", [])
+        poll_title = data.get("poll_title", "Movie Night Poll")
+        
+        if not recommendations:
+            return jsonify({"error": "No recommendations provided"}), 400
+        
+        if not participants:
+            return jsonify({"error": "No participants provided"}), 400
+        
+        # Take top 3 movies
+        top_3_movies = recommendations[:3]
+        
+        # Build poll options from showtimes
+        poll_options = []
+        for movie in top_3_movies:
+            title = movie.get('title')
+            showtimes = movie.get('showtimes', [])
+            
+            # Add each showtime as a poll option
+            for showtime in showtimes:
+                cinema = showtime.cinema  # ← FIXED
+                start_time = showtime.start.isoformat()  # ← FIXED
+                
+                option_text = f"{title} - {cinema} at {start_time}"
+                poll_options.append({
+                    'text': option_text,
+                    'movie': title,
+                    'cinema': cinema,
+                    'time': start_time
+                })
+        
+        # Create the poll
+        poll_id = poll_manager.create_poll(
+            title=poll_title,
+            options=poll_options,
+            participants=participants,
+            max_votes_per_user=3
+        )
+        
+        # DEMO: Hardcode votes for non-demo users
+        # Assume the demo user is 'noor' - others vote automatically
+        demo_user = "noor"
+        
+        # Pre-vote for sanne (likes first movie, different times)
+        if "sanne" in participants and "sanne" != demo_user:
+            sanne_votes = []
+            for i, option in enumerate(poll_options):
+                if option['movie'] == top_3_movies[0].get('title') and len(sanne_votes) < 3:
+                    sanne_votes.append(i)
+            
+            if sanne_votes:
+                poll_manager.submit_vote(poll_id, "sanne", sanne_votes)
+                print(f"[DEMO] Auto-voted for sanne: {sanne_votes}")
+        
+        # Pre-vote for ioana (likes second movie, different cinemas)
+        if "ioana" in participants and "ioana" != demo_user:
+            ioana_votes = []
+            second_movie = top_3_movies[1].get('title') if len(top_3_movies) > 1 else top_3_movies[0].get('title')
+            
+            for i, option in enumerate(poll_options):
+                if option['movie'] == second_movie and len(ioana_votes) < 3:
+                    ioana_votes.append(i)
+            
+            if ioana_votes:
+                poll_manager.submit_vote(poll_id, "ioana", ioana_votes)
+                print(f"[DEMO] Auto-voted for ioana: {ioana_votes}")
+        
+        # Get current results
+        results = poll_manager.get_poll_results(poll_id)
+        
+        return jsonify({
+            "poll_id": poll_id,
+            "title": poll_title,
+            "options": poll_options,
+            "participants": participants,
+            "demo_user": demo_user,
+            "current_votes": results['votes'],
+            "message": f"Poll created! {len([p for p in participants if p != demo_user])} user(s) have already voted."
+        })
+        
+    except Exception as e:
+        print(f"Error creating poll: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/vote", methods=["POST"])
+def vote():
+    """
+    Submit a vote to a poll.
+    
+    Expected JSON:
+    {
+        "poll_id": "abc123",
+        "username": "noor",
+        "option_indices": [0, 2, 5]  // Up to 3 options
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        poll_id = data.get("poll_id")
+        username = data.get("username")
+        option_indices = data.get("option_indices", [])
+        
+        if not poll_id:
+            return jsonify({"error": "poll_id required"}), 400
+        
+        if not username:
+            return jsonify({"error": "username required"}), 400
+        
+        if not option_indices or len(option_indices) == 0:
+            return jsonify({"error": "Must select at least one option"}), 400
+        
+        if len(option_indices) > 3:
+            return jsonify({"error": "Maximum 3 options allowed"}), 400
+        
+        # Submit vote
+        success = poll_manager.submit_vote(poll_id, username, option_indices)
+        
+        if not success:
+            return jsonify({"error": "Vote submission failed"}), 400
+        
+        # Get updated results
+        results = poll_manager.get_poll_results(poll_id)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Vote recorded for {username}!",
+            "results": results
+        })
+        
+    except Exception as e:
+        print(f"Error submitting vote: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/poll/<poll_id>/results", methods=["GET"])
+def get_poll_results(poll_id):
+    """
+    Get current poll results and determine winner.
+    If all voted, suggest a specific showtime.
+    """
+    try:
+        results = poll_manager.get_poll_results(poll_id)
+        
+        if not results:
+            return jsonify({"error": "Poll not found"}), 404
+        
+        # Determine winner (most votes)
+        option_tallies = results.get('option_tallies', {})
+        movie_tallies = results.get('movie_tallies', {})
+        
+        poll = poll_manager.polls.get(poll_id)
+        all_voted = len(results['votes']) == len(poll['participants'])
+        
+        if option_tallies:
+            # Find option with most votes
+            winner_option_id = max(option_tallies.items(), key=lambda x: x[1])[0]
+            winner_votes = option_tallies[winner_option_id]
+            winner_option = poll['options'][int(winner_option_id.replace('option_', ''))]
+            winner_movie = winner_option.get('movie')
+            
+            # If everyone voted, find specific showtime suggestion
+            showtime_suggestion = None
+            if all_voted:
+                # Get the winning movie's full recommendation data
+                # (You'd need to store recommendations with the poll or fetch them again)
+                # For now, generate a message template
+                showtime_suggestion = {
+                    "movie": winner_movie,
+                    "message": f"Great choice! Would you like to watch '{winner_movie}'?",
+                    "note": "Specific showtime will be suggested based on availability"
+                }
+            
+            return jsonify({
+                "poll_id": poll_id,
+                "results": results,
+                "winner": {
+                    "option_id": winner_option_id,
+                    "option_text": winner_option['text'],
+                    "movie": winner_movie,
+                    "votes": winner_votes
+                },
+                "movie_tallies": movie_tallies,
+                "all_voted": all_voted,
+                "showtime_suggestion": showtime_suggestion
+            })
+        else:
+            return jsonify({
+                "poll_id": poll_id,
+                "results": results,
+                "winner": None,
+                "all_voted": False,
+                "message": "No votes yet"
+            })
+        
+    except Exception as e:
+        print(f"Error getting poll results: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+@app.route("/poll/<poll_id>/suggest-showtime", methods=["GET"])
+def suggest_showtime(poll_id):
+    """
+    After voting ends, suggest a specific showtime for the winning movie.
+    Returns a natural language message.
+    """
+    try:
+        # Get poll results
+        results = poll_manager.get_poll_results(poll_id)
+        if not results:
+            return jsonify({"error": "Poll not found"}), 404
+        
+        poll = poll_manager.polls.get(poll_id)
+        
+        # Check if everyone voted
+        all_voted = len(results['votes']) == len(poll['participants'])
+        if not all_voted:
+            return jsonify({
+                "message": f"Waiting for {len(poll['participants']) - len(results['votes'])} more vote(s)..."
+            })
+        
+        # Get winner
+        option_tallies = results.get('option_tallies', {})
+        if not option_tallies:
+            return jsonify({"error": "No votes yet"}), 400
+        
+        winner_option_id = max(option_tallies.items(), key=lambda x: x[1])[0]
+        winner_option = poll['options'][int(winner_option_id.replace('option_', ''))]
+        winner_movie = winner_option.get('movie')
+        
+        # Get the stored recommendations from poll metadata
+        # (We need to store recommendations with the poll)
+        recommendations = poll.get('recommendations', [])
+        
+        # Find the winning movie's showtimes
+        winning_movie_data = None
+        for rec in recommendations:
+            if rec.get('title') == winner_movie:
+                winning_movie_data = rec
+                break
+        
+        if not winning_movie_data or not winning_movie_data.get('showtimes'):
+            return jsonify({
+                "message": f"'{winner_movie}' won! Let me check showtimes..."
+            })
+        
+        # Pick first available showtime (could be smarter - e.g., earliest convenient time)
+        first_showtime = winning_movie_data['showtimes'][0]
+        cinema = first_showtime.cinema
+        time_str = first_showtime.start.strftime("%A at %H:%M")  # "Friday at 13:30"
+        
+        # Generate natural message
+        message = f"Perfect! Would you like to go to '{winner_movie}' on {time_str} at {cinema}? 🎬"
+        
+        return jsonify({
+            "poll_id": poll_id,
+            "winner_movie": winner_movie,
+            "suggested_showtime": {
+                "cinema": cinema,
+                "time": first_showtime.start.isoformat(),
+                "formatted_time": time_str
+            },
+            "message": message,
+            "all_voted": True
+        })
+        
+    except Exception as e:
+        print(f"Error suggesting showtime: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
