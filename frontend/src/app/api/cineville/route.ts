@@ -1,13 +1,22 @@
 import { NextResponse } from 'next/server'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export async function GET() {
   try {
+    // Don't make requests during build time
+    if (!API_BASE_URL || API_BASE_URL === 'undefined') {
+      throw new Error('API URL not configured');
+    }
+
     // Make a request to your Python backend
-    const response = await fetch('http://localhost:5000/api/cineville', {
+    const response = await fetch(`${API_BASE_URL}/cineville/upcoming`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
+      // Add timeout to prevent hanging
+      signal: AbortSignal.timeout(10000)
     })
 
     if (!response.ok) {
@@ -50,3 +59,6 @@ export async function GET() {
     return NextResponse.json(mockData)
   }
 }
+
+// Prevent this route from being pre-rendered at build time
+export const dynamic = 'force-dynamic';
