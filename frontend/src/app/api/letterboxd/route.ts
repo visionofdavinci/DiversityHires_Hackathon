@@ -3,6 +3,34 @@ import { NextResponse } from 'next/server'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export async function GET() {
+  // Return mock data during build time
+  const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_API_URL;
+  
+  if (isBuildTime) {
+    console.log('Build time detected, returning mock data');
+    const mockData = [
+      {
+        title: 'Oppenheimer',
+        rating: 4.5,
+        watchedDate: '2023-07-21',
+        review: 'A masterpiece of biographical filmmaking.'
+      },
+      {
+        title: 'Barbie',
+        rating: 4.0,
+        watchedDate: '2023-07-22',
+        review: 'Surprisingly deep and entertaining.'
+      },
+      {
+        title: 'Poor Things',
+        rating: 4.8,
+        watchedDate: '2023-12-25',
+        review: 'Yorgos Lanthimos at his best.'
+      }
+    ];
+    return NextResponse.json(mockData);
+  }
+
   try {
     // Don't make requests during build time
     if (!API_BASE_URL || API_BASE_URL === 'undefined') {
