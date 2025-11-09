@@ -20,7 +20,7 @@ def find_common_available_times(days_ahead=7, min_duration_minutes=120):
         list: List of tuples containing (start_datetime, end_datetime) for common free slots
     """
     # Get all user tokens
-    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
+    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "/etc/secrets")
     user_tokens = [f for f in os.listdir(tokens_folder) if f.endswith(".json")]
     
     if not user_tokens:
