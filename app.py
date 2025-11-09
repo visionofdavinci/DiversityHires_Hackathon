@@ -14,8 +14,9 @@ from src.calendar_agent import (
 from src.letterboxd_integration import LetterboxdIntegration
 from src.cineville_scraper import CinevilleScraper
 from src.movie_matcher import TMDbClient
-from src.group_history import GENRE_MAPfrom src.gemini_parser import parse_user_request, smart_mock_parser 
+from src.group_history import GENRE_MAP
 from datetime import datetime, timedelta 
+from src.gemini_nlg import generate_natural_response
 
 app = Flask(__name__)
 # Use a consistent secret key (in production, use environment variable)
@@ -602,7 +603,11 @@ def chat():
         )
 
         # 5. Build response
-        summary = generate_summary(parsed)
+        #summary = generate_summary(parsed)
+        summary = generate_natural_response(
+            parsed_data=parsed,
+            recommendations=recommendations_result.get("recommendations", [])
+        )
         
         return jsonify({
             "message": summary,
