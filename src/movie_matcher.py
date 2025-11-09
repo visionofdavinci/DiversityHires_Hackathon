@@ -621,7 +621,7 @@ class GroupMovieMatcher:
 
         if not profiles:
             print("[GroupMovieMatcher] No valid users, aborting.")
-            return []
+            return [], group_history
 
         # 2) Get calendar free slots FIRST
         free_slots: Optional[List[Tuple[datetime, datetime]]] = None
@@ -639,22 +639,45 @@ class GroupMovieMatcher:
                     print(f"   Last slot: {free_slots[-1][0]} - {free_slots[-1][1]}")
             except Exception as e:
                 print(f"[GroupMovieMatcher] Error getting free slots: {e}")
-                return []
+                print(f"[GroupMovieMatcher] Falling back to no calendar filtering")
+                free_slots = None  # Continue without calendar filtering
         
-        if not free_slots:
-            print("[GroupMovieMatcher] No free slots found, aborting.")
-            return []
-
-        # 3) Get Cineville movies ONLY during those free slots 
-        print("\n[GroupMovieMatcher] Fetching Cineville movies for free slots...")
-        cineville_movies = self.cineville_scraper.get_movies_for_free_slots(
-            free_slots=free_slots,
-            limit_amsterdam=limit_amsterdam
-        )
+        # 3) Get Cineville movies
+        # If we don't have free slots, get ALL movies and don't filter by calendar
+        print("\n[GroupMovieMatcher] Fetching Cineville movies...")
+        if free_slots:
+            print(f"[GroupMovieMatcher] Using {len(free_slots)} free calendar slots")
+            cineville_movies = self.cineville_scraper.get_movies_for_free_slots(
+                free_slots=free_slots,
+                limit_amsterdam=limit_amsterdam
+            )
+        else:
+            print("[GroupMovieMatcher] No calendar filtering - showing all movies")
+            # Get all movies for the next days_ahead days
+            all_showtimes = self.cineville_scraper.get_all_showtimes(
+                days_ahead=days_ahead,
+                limit_amsterdam=limit_amsterdam
+            )
+            # Group by movie title
+            movies_dict = {}
+            for showtime in all_showtimes:
+                title = showtime.get('title')
+                if title not in movies_dict:
+                    movies_dict[title] = {
+                        'title': title,
+                        'year': showtime.get('year'),
+                        'schedules': {}
+                    }
+                cinema = showtime.get('cinema', 'Unknown')
+                if cinema not in movies_dict[title]['schedules']:
+                    movies_dict[title]['schedules'][cinema] = []
+                movies_dict[title]['schedules'][cinema].append(showtime.get('showtime'))
+            
+            cineville_movies = list(movies_dict.values())
 
         if not cineville_movies:
-            print("[GroupMovieMatcher] No Cineville movies found in free slots.")
-            return []
+            print("[GroupMovieMatcher] No Cineville movies found.")
+            return [], group_history
 
         print(f"[GroupMovieMatcher] Found {len(cineville_movies)} movies")
 
@@ -689,7 +712,19 @@ class GroupMovieMatcher:
             scores_list = list(per_user_scores.values())
             avg_score = sum(scores_list) / len(scores_list)
             worst = min(scores_list)
-            group_score = avg_score + 0.3 * worst
+            best = max(scores_list)
+            
+            # Group score formula with better differentiation
+            # Scale: 0.0 - 2.0 (like individual scores)
+            # More weight on worst score to heavily penalize if someone dislikes it
+            # Also consider variance - movies everyone agrees on get a bonus
+            variance_penalty = (best - worst) * 0.2  # Penalize disagreement
+            
+            # 50% average, 40% worst (fairness), -10% variance penalty
+            group_score = 0.5 * avg_score + 0.4 * worst - variance_penalty
+            
+            # Clamp to valid range [0.0, 2.0]
+            group_score = max(0.0, min(2.0, group_score))
 
             # Flatten showtimes
             showtimes: List[ShowTime] = []
@@ -721,6 +756,22 @@ class GroupMovieMatcher:
         # APPLY GROUP LEARNING (if enabled and history exists)
         if learn_from_history and len(group_history.history) > 0:
             results = group_history.apply_learning(results, usernames)
+        
+        # NORMALIZE SCORES for better differentiation
+        # This spreads the scores across the full range to make differences more visible
+        if results:
+            scores = [r.group_score for r in results]
+            min_score = min(scores)
+            max_score = max(scores)
+            score_range = max_score - min_score
+            
+            # Only normalize if there's enough variation
+            if score_range > 0.1:  # At least 0.1 difference
+                for r in results:
+                    # Normalize to 0-2 range with some minimum floor
+                    # Keep minimum at 0.4 (20% on 0-10 scale) so nothing shows as 0
+                    normalized = ((r.group_score - min_score) / score_range) * 1.6 + 0.4
+                    r.group_score = float(normalized)
             
         # Sort and return
         results.sort(key=lambda r: r.group_score, reverse=True)

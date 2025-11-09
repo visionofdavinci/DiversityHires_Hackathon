@@ -2,13 +2,19 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    // Make a request to your Python backend
+    // Make a request to your Python backend with timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+    
     const response = await fetch('http://localhost:5000/api/calendar', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
     })
+    
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       throw new Error('Failed to fetch calendar data')
@@ -18,6 +24,11 @@ export async function GET() {
     return NextResponse.json(data)
   } catch (error) {
     console.error('Calendar API error:', error)
+    
+    // Check if it was a timeout error
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Request timed out - calendar service may be experiencing issues')
+    }
     
     // For development, return mock data
     const mockData = [

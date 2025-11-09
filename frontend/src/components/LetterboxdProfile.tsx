@@ -31,14 +31,14 @@ export default function LetterboxdProfile({ username }: LetterboxdProfileProps) 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 text-red-700 rounded-lg">
+      <div className="p-4 bg-red-900 text-red-200 rounded-lg text-sm">
         <p>{error}</p>
       </div>
     );
@@ -49,35 +49,35 @@ export default function LetterboxdProfile({ username }: LetterboxdProfileProps) 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center space-x-4">
         <div className="flex-1">
-          <h2 className="text-xl font-semibold">{profile.username}'s Profile</h2>
-          <p className="text-gray-600">Letterboxd Ratings</p>
+          <h2 className="text-lg font-semibold text-white">{profile.username}'s Profile</h2>
+          <p className="text-gray-400 text-sm">Letterboxd Ratings</p>
         </div>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         {profile.ratings.map((rating, index) => (
           <div
             key={index}
-            className="p-4 bg-white shadow rounded-lg hover:shadow-md transition-shadow"
+            className="p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
           >
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="font-medium">
+                <h3 className="font-medium text-white text-sm">
                   {rating.movieTitle}
-                  {rating.year && <span className="text-gray-500"> ({rating.year})</span>}
+                  {rating.year && <span className="text-gray-400"> ({rating.year})</span>}
                 </h3>
               </div>
               <div className="flex items-center space-x-1">
                 {[...Array(5)].map((_, i) => (
                   <svg
                     key={i}
-                    className={`w-5 h-5 ${
+                    className={`w-4 h-4 ${
                       i < rating.rating
                         ? 'text-yellow-400'
-                        : 'text-gray-300'
+                        : 'text-gray-500'
                     }`}
                     fill="currentColor"
                     viewBox="0 0 20 20"
@@ -92,7 +92,7 @@ export default function LetterboxdProfile({ username }: LetterboxdProfileProps) 
       </div>
 
       {profile.ratings.length === 0 && (
-        <p className="text-gray-500 text-center py-8">
+        <p className="text-gray-400 text-center py-6 text-sm">
           No ratings available
         </p>
       )}

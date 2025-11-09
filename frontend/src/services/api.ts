@@ -1,34 +1,59 @@
 import { MovieRecommendation, CalendarSlot, UserProfile } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const api = {
   // Calendar Integration
   async getCalendarAuth(username: string): Promise<string> {
-    const response = await fetch(`${API_BASE_URL}/auth/calendar/${username}`);
+    const response = await fetch(`${API_BASE_URL}/calendar/auth/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username })
+    });
     const data = await response.json();
-    return data.authUrl;
+    return data.auth_url;
   },
 
   async getCalendarFreeSlots(username: string, daysAhead: number = 7): Promise<CalendarSlot[]> {
     const response = await fetch(
-      `${API_BASE_URL}/calendar/${username}/free-slots?days=${daysAhead}`
+      `${API_BASE_URL}/calendar/${username}/events?days_ahead=${daysAhead}`
     );
-    return response.json();
+    if (!response.ok) {
+      throw new Error('Failed to fetch calendar events');
+    }
+    const data = await response.json();
+    // Convert events to free slots format if needed
+    return data.events || [];
   },
 
   // Letterboxd Integration
-  async getUserProfile(username: string): Promise<UserProfile> {
-    const response = await fetch(`${API_BASE_URL}/letterboxd/${username}/profile`);
-    return response.json();
+  async getUserProfile(username: string, quick: boolean = true): Promise<UserProfile> {
+    const queryParam = quick ? '?quick=true' : '';
+    const response = await fetch(`${API_BASE_URL}/letterboxd/${username}${queryParam}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch user profile');
+    }
+    const data = await response.json();
+    
+    // Transform the response to match UserProfile type
+    return {
+      username: data.letterboxd_username || username,
+      ratings: (data.recent_movies || []).map((movie: any) => ({
+        movieTitle: movie.title,
+        rating: movie.rating || 0,
+        year: movie.year
+      }))
+    };
   },
 
   async getUserRatings(username: string): Promise<UserProfile['ratings']> {
-    const response = await fetch(`${API_BASE_URL}/letterboxd/${username}/ratings`);
-    return response.json();
+    const profile = await this.getUserProfile(username);
+    return profile.ratings;
   },
 
-  // Cineville Integration
+  // Cineville Integration  
   async getMovieRecommendations(
     usernames: string[],
     options: {
@@ -40,29 +65,38 @@ export const api = {
       mood?: string;
     } = {}
   ): Promise<MovieRecommendation[]> {
-    // Convert options to string values for URLSearchParams
-    const queryParams: Record<string, string> = {
-      usernames: usernames.join(','),
-      ...(options.daysAhead !== undefined && { daysAhead: options.daysAhead.toString() }),
-      ...(options.limitAmsterdam !== undefined && { limitAmsterdam: options.limitAmsterdam.toString() }),
-      ...(options.maxResults !== undefined && { maxResults: options.maxResults.toString() }),
-      ...(options.useCalendar !== undefined && { useCalendar: options.useCalendar.toString() }),
-      ...(options.minSlotMinutes !== undefined && { minSlotMinutes: options.minSlotMinutes.toString() }),
-      ...(options.mood && { mood: options.mood })
-    };
-
-    const params = new URLSearchParams(queryParams);
+    const response = await fetch(`${API_BASE_URL}/recommendations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        usernames,
+        days_ahead: options.daysAhead || 7,
+        limit_amsterdam: options.limitAmsterdam !== false,
+        max_results: options.maxResults || 10,
+        use_calendar: options.useCalendar !== false,
+        min_hours: options.minSlotMinutes ? options.minSlotMinutes / 60 : 2,
+        mood: options.mood
+      })
+    });
     
-    const response = await fetch(`${API_BASE_URL}/recommendations?${params}`);
-    return response.json();
+    if (!response.ok) {
+      throw new Error('Failed to fetch recommendations');
+    }
+    
+    const data = await response.json();
+    return data.recommendations || [];
   },
 
   async getCinevilleMovies(options: {
     limitAmsterdam?: boolean;
     daysAhead?: number;
   } = {}): Promise<any[]> {
-    const params = new URLSearchParams(options as any);
-    const response = await fetch(`${API_BASE_URL}/cineville/movies?${params}`);
+    const response = await fetch(`${API_BASE_URL}/cineville/upcoming`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch Cineville movies');
+    }
     return response.json();
   }
 };

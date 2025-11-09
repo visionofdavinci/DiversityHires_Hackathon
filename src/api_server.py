@@ -1,9 +1,8 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-from letterboxd_integration import LetterboxdClient
+from letterboxd_integration import LetterboxdIntegration
 from cineville_scraper import CinevilleScraper
-from calendar_agent import CalendarAgent
-from utils.config_loader import ConfigLoader
+from calendar_agent import authenticate, get_events_for_user
 import json
 import os
 
@@ -11,59 +10,80 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Initialize services
-config = ConfigLoader()
-letterboxd_client = LetterboxdClient()
 cineville_scraper = CinevilleScraper()
-calendar_agent = CalendarAgent()
 
-@app.route('/api/letterboxd', methods=['GET'])
-def get_letterboxd_data():
+@app.route('/api/letterboxd/ratings', methods=['GET'])
+def get_letterboxd_ratings():
     try:
-        # Get user's watched films from Letterboxd
-        watched_films = letterboxd_client.get_watched_films()
-        formatted_films = [{
-            'title': film['title'],
-            'rating': film.get('rating', None),
-            'watchedDate': film.get('watched_date', None),
-            'review': film.get('review', '')
-        } for film in watched_films]
-        return jsonify(formatted_films)
+        username = request.args.get('username')
+        if not username:
+            return jsonify({'error': 'Username is required'}), 400
+        
+        # Get user's movie ratings from Letterboxd
+        lb_client = LetterboxdIntegration(username=username)
+        preferences = lb_client.get_preferences()
+        
+        formatted_ratings = [{
+            'title': pref.title,
+            'rating': pref.rating if pref.rating else 0,
+            'year': pref.year
+        } for pref in preferences if pref.rating]
+        
+        return jsonify({'ratings': formatted_ratings, 'username': username})
     except Exception as e:
-        print(f"Error fetching Letterboxd data: {e}")
+        print(f"Error fetching Letterboxd ratings: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/cineville', methods=['GET'])
-def get_cineville_data():
+@app.route('/api/cineville/movies', methods=['GET'])
+def get_cineville_movies():
     try:
-        # Get upcoming movies from Cineville
-        movies = cineville_scraper.get_upcoming_movies()
+        # Get upcoming movies from Cineville for the next week
+        movies = cineville_scraper.get_all_showtimes(days_ahead=7, limit_amsterdam=True)
+        
         formatted_movies = [{
             'title': movie['title'],
-            'location': movie.get('location', 'Amsterdam'),
-            'theater': movie.get('theater', ''),
-            'showtime': movie.get('showtime', '')
+            'location': movie.get('cinema_name', 'Amsterdam'),
+            'theater': movie.get('cinema_name', ''),
+            'showtime': movie.get('start_time', '')
         } for movie in movies]
+        
         return jsonify(formatted_movies)
     except Exception as e:
-        print(f"Error fetching Cineville data: {e}")
+        print(f"Error fetching Cineville movies: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/calendar', methods=['GET'])
-def get_calendar_data():
+@app.route('/api/calendar/auth', methods=['POST'])
+def authenticate_calendar():
     try:
-        # Get calendar events
-        events = calendar_agent.get_events()
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Extract username from email (e.g., user@gmail.com -> user)
+        username = email.split('@')[0]
+        token_filename = f"{username}.json"
+        
+        # Authenticate and get calendar service
+        service = authenticate(token_filename=token_filename)
+        
+        # Get events for the next 2 weeks
+        events = get_events_for_user(service, username)
+        
         formatted_events = [{
-            'id': str(event.get('id', '')),
             'title': event.get('summary', 'Untitled Event'),
             'start': event.get('start', {}).get('dateTime', ''),
-            'end': event.get('end', {}).get('dateTime', ''),
-            'description': event.get('description', '')
+            'end': event.get('end', {}).get('dateTime', '')
         } for event in events]
-        return jsonify(formatted_events)
+        
+        return jsonify({
+            'events': formatted_events,
+            'username': username
+        })
     except Exception as e:
-        print(f"Error fetching calendar data: {e}")
+        print(f"Error authenticating calendar: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=8000, debug=True)

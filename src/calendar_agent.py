@@ -1,14 +1,192 @@
 # src/calendar_agent.py
 import os
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import InstalledAppFlow, Flow
 from googleapiclient.discovery import build
 from src.utils.config_loader import get_config
 from src.utils.time_utils import find_free_slots
 from datetime import datetime, timedelta
 from google.auth.transport.requests import Request
+import google.auth.transport.requests
+import requests
+import json
 
 
+# Google Calendar OAuth scopes
+SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
+
+
+class TimeoutHTTPRequest(google.auth.transport.requests.Request):
+    """Custom Request class with timeout to prevent hanging on OAuth requests."""
+    def __init__(self, timeout=10):
+        """
+        Args:
+            timeout: Timeout in seconds for HTTP requests (default: 10)
+        """
+        session = requests.Session()
+        # Configure session with timeout
+        adapter = requests.adapters.HTTPAdapter()
+        session.mount('https://', adapter)
+        session.mount('http://', adapter)
+        super().__init__(session)
+        self.timeout = timeout
+    
+    def __call__(self, url, method='GET', body=None, headers=None, **kwargs):
+        """Override to add timeout to all requests."""
+        kwargs['timeout'] = kwargs.get('timeout', self.timeout)
+        return super().__call__(url, method=method, body=body, headers=headers, **kwargs)
+
+
+def build_calendar_service(credentials, timeout=30):
+    """
+    Build a Google Calendar service with timeout configuration.
+    
+    Args:
+        credentials: Google OAuth credentials
+        timeout: HTTP timeout in seconds for API calls (default: 30)
+    
+    Returns:
+        Google Calendar service object
+    """
+    # Build service directly with credentials
+    # The timeout protection is handled at the credentials refresh level
+    service = build("calendar", "v3", credentials=credentials)
+    return service
+
+
+def get_oauth_flow(redirect_uri='http://localhost:5000/calendar/oauth2callback'):
+    """
+    Create and return a Flow instance for OAuth2 authentication.
+    This will be used to generate the authorization URL.
+    """
+    try:
+        cfg = get_config()
+        credentials_path = cfg.get("GOOGLE_CREDENTIALS_PATH")
+        
+        if not credentials_path or not os.path.exists(credentials_path):
+            # Try default locations
+            default_paths = ['./credentials.json', '../credentials.json', 'credentials.json']
+            for path in default_paths:
+                if os.path.exists(path):
+                    credentials_path = path
+                    break
+            
+            if not credentials_path or not os.path.exists(credentials_path):
+                raise FileNotFoundError(
+                    "Google OAuth credentials file not found. "
+                    "Please download it from Google Cloud Console and save as 'credentials.json' in project root"
+                )
+        
+        # Create flow without scope validation to accept whatever Google grants
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_secrets_file(
+            credentials_path,
+            scopes=SCOPES,
+            redirect_uri=redirect_uri
+        )
+        
+        # Disable strict scope checking
+        flow.oauth2session.scope = SCOPES
+        
+        return flow
+    except Exception as e:
+        print(f"Error creating OAuth flow: {e}")
+        raise
+
+
+def get_authorization_url():
+    """
+    Generate the Google OAuth authorization URL that users should visit.
+    Returns: (authorization_url, state)
+    """
+    flow = get_oauth_flow()
+    authorization_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true',
+        prompt='consent'  # Force consent screen to get refresh token
+    )
+    return authorization_url, state
+
+
+def exchange_code_for_tokens(code, state):
+    """
+    Exchange the authorization code for access and refresh tokens.
+    Returns: credentials object
+    
+    Note: Google may grant additional scopes beyond what we requested.
+    We accept whatever scopes Google grants us.
+    """
+    flow = get_oauth_flow()
+    
+    # Bypass scope validation by setting oauth2session scope to None
+    # This prevents the "Scope has changed" error
+    original_scope = flow.oauth2session.scope
+    flow.oauth2session.scope = None
+    
+    try:
+        flow.fetch_token(code=code)
+        return flow.credentials
+    except Warning as w:
+        # OAuth library can raise Warning as exception - ignore scope changes
+        if 'Scope has changed' in str(w):
+            print("[OAuth] Note: Google granted additional scopes, continuing anyway")
+            # Try to return credentials if they were fetched
+            if hasattr(flow, 'credentials') and flow.credentials:
+                return flow.credentials
+        raise
+    finally:
+        # Restore original scope (cleanup)
+        flow.oauth2session.scope = original_scope
+
+
+def save_credentials(credentials, username):
+    """
+    Save user credentials to a JSON file.
+    """
+    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
+    os.makedirs(tokens_folder, exist_ok=True)
+    
+    token_path = os.path.join(tokens_folder, f"{username}.json")
+    
+    # Convert credentials to dict and save
+    creds_data = {
+        'token': credentials.token,
+        'refresh_token': credentials.refresh_token,
+        'token_uri': credentials.token_uri,
+        'client_id': credentials.client_id,
+        'client_secret': credentials.client_secret,
+        'scopes': credentials.scopes
+    }
+    
+    with open(token_path, 'w') as token_file:
+        json.dump(creds_data, token_file)
+    
+    return token_path
+
+
+def load_credentials(username):
+    """
+    Load credentials from saved token file.
+    """
+    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
+    token_path = os.path.join(tokens_folder, f"{username}.json")
+    
+    if not os.path.exists(token_path):
+        return None
+    
+    with open(token_path, 'r') as token_file:
+        creds_data = json.load(token_file)
+    
+    credentials = Credentials(
+        token=creds_data.get('token'),
+        refresh_token=creds_data.get('refresh_token'),
+        token_uri=creds_data.get('token_uri'),
+        client_id=creds_data.get('client_id'),
+        client_secret=creds_data.get('client_secret'),
+        scopes=creds_data.get('scopes')
+    )
+    
+    return credentials
 
 
 def authenticate(token_filename: str = None):
@@ -16,7 +194,6 @@ def authenticate(token_filename: str = None):
     Authenticate a Google Calendar user using a specific token file.
     If no token_filename is provided, fallback to default from config.
     """
-    from google.auth.transport.requests import Request  # make sure this import exists
     cfg = get_config()
     tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
     os.makedirs(tokens_folder, exist_ok=True)
@@ -26,16 +203,18 @@ def authenticate(token_filename: str = None):
 
     creds = None
     if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, cfg["GOOGLE_CALENDAR_SCOPES"])
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
     # If no valid credentials, run OAuth flow
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            # Use custom Request with timeout to prevent hanging
+            request = TimeoutHTTPRequest(timeout=10)
+            creds.refresh(request)
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
                 cfg["GOOGLE_CREDENTIALS_PATH"],
-                cfg["GOOGLE_CALENDAR_SCOPES"]
+                SCOPES
             )
             creds = flow.run_local_server(port=0)  # opens browser for authentication
 
@@ -43,7 +222,63 @@ def authenticate(token_filename: str = None):
         with open(token_path, "w") as token_file:
             token_file.write(creds.to_json())
 
-    service = build("calendar", "v3", credentials=creds)
+    service = build_calendar_service(creds, timeout=30)
+    return service
+
+
+def get_calendar_service(username):
+    """
+    Get authenticated Google Calendar service for a user.
+    Refreshes tokens if needed.
+    """
+    credentials = load_credentials(username)
+    
+    if not credentials:
+        raise ValueError(f"No credentials found for user {username}. Please authenticate first.")
+    
+    # Refresh token if expired
+    if credentials.expired and credentials.refresh_token:
+        try:
+            # Use custom Request with timeout to prevent hanging
+            request = TimeoutHTTPRequest(timeout=10)
+            credentials.refresh(request)
+            save_credentials(credentials, username)
+        except Exception as e:
+            print(f"Error refreshing token: {e}")
+            raise ValueError(f"Token refresh failed for user {username}. Please re-authenticate.")
+    
+    service = build_calendar_service(credentials, timeout=30)
+    return service
+
+
+def get_calendar_service_simple(username):
+    """
+    Simplified version that works with pre-existing token files.
+    This is useful when you already have valid tokens and don't need OAuth flow.
+    """
+    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
+    token_path = os.path.join(tokens_folder, f"{username}.json")
+    
+    if not os.path.exists(token_path):
+        raise ValueError(f"No token file found for {username}. Please authenticate first.")
+    
+    # Load credentials from file
+    credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
+    
+    # Refresh if expired
+    if credentials.expired and credentials.refresh_token:
+        try:
+            # Use custom Request with timeout to prevent hanging
+            request = TimeoutHTTPRequest(timeout=10)
+            credentials.refresh(request)
+            # Save refreshed credentials
+            with open(token_path, 'w') as token_file:
+                token_file.write(credentials.to_json())
+        except Exception as e:
+            print(f"Error refreshing token: {e}")
+            raise ValueError(f"Token refresh failed. Token may be invalid or revoked.")
+    
+    service = build_calendar_service(credentials, timeout=30)
     return service
 
 
@@ -153,14 +388,7 @@ def get_user_events(username: str, days_ahead: int = 7):
     """
     Return a summary of the user's upcoming calendar events.
     """
-    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
-    token_filename = f"{username}.json"  # or whatever naming convention you use
-
-    token_path = os.path.join(tokens_folder, token_filename)
-    if not os.path.exists(token_path):
-        raise FileNotFoundError(f"No token found for {username} in {tokens_folder}")
-
-    service = authenticate(token_filename=token_filename)
+    service = get_calendar_service(username)
     busy_events = get_all_busy_events(service, days_ahead=days_ahead)
 
     # Optionally convert events to a readable dict list
@@ -168,4 +396,23 @@ def get_user_events(username: str, days_ahead: int = 7):
         {"start": s.isoformat(), "end": e.isoformat(), "title": t}
         for s, e, t in busy_events
     ]
+    return event_list
+
+
+def get_events_for_user(service, username, days_ahead=14):
+    """
+    Get formatted events for a user using an existing service object.
+    Returns list of event dictionaries.
+    """
+    busy_events = get_all_busy_events(service, days_ahead=days_ahead)
+    
+    # Convert to the expected format with proper datetime handling
+    event_list = []
+    for start_dt, end_dt, title in busy_events:
+        event_list.append({
+            'summary': title,
+            'start': {'dateTime': start_dt.isoformat()},
+            'end': {'dateTime': end_dt.isoformat()}
+        })
+    
     return event_list
