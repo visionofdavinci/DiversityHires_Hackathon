@@ -90,7 +90,7 @@ async def get_letterboxd_profile(username: str):
             "ratings": []  # You can add actual ratings here
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 =======
 # main.py
 import os
