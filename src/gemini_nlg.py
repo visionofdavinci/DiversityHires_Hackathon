@@ -74,8 +74,8 @@ User requested:
                 # Get unique cinemas for this movie
                 cinemas = {}
                 for showtime in showtimes:
-                    cinema = showtime.get('cinema', 'Unknown')
-                    time = showtime.get('start', '')
+                    cinema = showtime.cinema  # ← FIXED
+                    time = showtime.start.isoformat() if showtime.start else 'Unknown'  # ← FIXED
                     if cinema not in cinemas:
                         cinemas[cinema] = []
                     cinemas[cinema].append(time)

@@ -1,103 +1,121 @@
 """
 poll_manager.py
 
-Handles creation and management of group movie polls.
-
-- Creates a poll from top movie recommendations
-- Stores votes in memory (for now; can be replaced by a DB later)
-- Returns poll results in ranked order
+Handles creation and management of group movie polls with multi-vote support.
 """
 
-from __future__ import annotations
-from typing import Dict, List
+from typing import Dict, List, Optional
 from datetime import datetime
-from uuid import uuid4
-
-from src.orchestrator import get_group_recommendations
-
-# ----------------------------------------------------------------------
-# In-memory storage (simple, replace with DB later)
-# ----------------------------------------------------------------------
-
-ACTIVE_POLLS: Dict[str, dict] = {}
+import uuid
 
 
-# ----------------------------------------------------------------------
-# Create a poll
-# ----------------------------------------------------------------------
-def create_poll(usernames: List[str], **kwargs) -> dict:
-    """
-    Create a poll based on top group recommendations.
-    """
-    recommendations = get_group_recommendations(usernames=usernames, **kwargs)
-    movies = recommendations.get("movies", recommendations)  # support both dict or list output
-
-    poll_id = str(uuid4())
-
-    poll_data = {
-        "poll_id": poll_id,
-        "created_at": datetime.utcnow().isoformat(),
-        "usernames": usernames,
-        "movies": [],
-        "votes": {},  # {username: movie_title}
-    }
-
-    for m in movies:
-        poll_data["movies"].append({
-            "title": m.get("title"),
-            "year": m.get("year"),
-            "group_score": m.get("group_score"),
-            "showtimes": m.get("showtimes", []),
-            "poster": m.get("tmdb", {}).get("poster_path"),
-            "overview": m.get("tmdb", {}).get("overview"),
-        })
-
-    ACTIVE_POLLS[poll_id] = poll_data
-    return poll_data
-
-
-# ----------------------------------------------------------------------
-# Voting
-# ----------------------------------------------------------------------
-def submit_vote(poll_id: str, username: str, movie_title: str) -> dict:
-    """
-    Record a user's vote for a movie in a poll.
-    """
-    poll = ACTIVE_POLLS.get(poll_id)
-    if not poll:
-        raise ValueError("Poll not found")
-
-    if movie_title not in [m["title"] for m in poll["movies"]]:
-        raise ValueError("Invalid movie title for this poll")
-
-    poll["votes"][username] = movie_title
-    return {"message": f"Vote recorded for {username}", "poll_id": poll_id}
-
-
-# ----------------------------------------------------------------------
-# Get poll results
-# ----------------------------------------------------------------------
-def get_poll_results(poll_id: str) -> dict:
-    """
-    Return poll standings: number of votes per movie.
-    """
-    poll = ACTIVE_POLLS.get(poll_id)
-    if not poll:
-        raise ValueError("Poll not found")
-
-    tally: Dict[str, int] = {m["title"]: 0 for m in poll["movies"]}
-    for vote in poll["votes"].values():
-        tally[vote] = tally.get(vote, 0) + 1
-
-    results = sorted(
-        [{"title": t, "votes": v} for t, v in tally.items()],
-        key=lambda x: x["votes"],
-        reverse=True,
-    )
-
-    return {
-        "poll_id": poll_id,
-        "results": results,
-        "total_votes": len(poll["votes"]),
-        "movies": poll["movies"],
-    }
+class PollManager:
+    """Manages movie polls with option-based multi-voting."""
+    
+    def __init__(self):
+        self.polls: Dict[str, dict] = {}
+    
+    def create_poll(
+        self, 
+        title: str, 
+        options: List[dict], 
+        participants: List[str],
+        max_votes_per_user: int = 1
+    ) -> str:
+        """
+        Create a new poll.
+        
+        Args:
+            title: Poll title
+            options: List of dicts with 'text', 'movie', 'cinema', 'time'
+            participants: List of usernames who can vote
+            max_votes_per_user: Maximum votes each user can cast
+            
+        Returns:
+            poll_id: Unique identifier for the poll
+        """
+        poll_id = str(uuid.uuid4())
+        
+        self.polls[poll_id] = {
+            'poll_id': poll_id,
+            'title': title,
+            'options': options,
+            'participants': participants,
+            'max_votes_per_user': max_votes_per_user,
+            'votes': {},  # {username: [option_indices]}
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        return poll_id
+    
+    def submit_vote(
+        self, 
+        poll_id: str, 
+        username: str, 
+        option_indices: List[int]
+    ) -> bool:
+        """
+        Submit a vote for a poll.
+        
+        Args:
+            poll_id: Poll identifier
+            username: Voter username
+            option_indices: List of option indices (0-based)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        poll = self.polls.get(poll_id)
+        if not poll:
+            return False
+        
+        if username not in poll['participants']:
+            return False
+        
+        if len(option_indices) > poll['max_votes_per_user']:
+            return False
+        
+        # Validate indices
+        if any(i < 0 or i >= len(poll['options']) for i in option_indices):
+            return False
+        
+        poll['votes'][username] = option_indices
+        return True
+    
+    def get_poll_results(self, poll_id: str) -> Optional[dict]:
+        """
+        Get poll results with vote tallies.
+        
+        Returns:
+            Dict with votes, option_tallies, movie_tallies
+        """
+        poll = self.polls.get(poll_id)
+        if not poll:
+            return None
+        
+        # Tally votes by option
+        option_tallies = {}
+        for i in range(len(poll['options'])):
+            option_id = f"option_{i}"
+            option_tallies[option_id] = 0
+        
+        for username, indices in poll['votes'].items():
+            for idx in indices:
+                option_id = f"option_{idx}"
+                option_tallies[option_id] += 1
+        
+        # Tally votes by movie
+        movie_tallies = {}
+        for username, indices in poll['votes'].items():
+            for idx in indices:
+                movie = poll['options'][idx].get('movie', 'Unknown')
+                movie_tallies[movie] = movie_tallies.get(movie, 0) + 1
+        
+        return {
+            'poll_id': poll_id,
+            'votes': poll['votes'],
+            'option_tallies': option_tallies,
+            'movie_tallies': movie_tallies,
+            'total_votes': len(poll['votes']),
+            'total_participants': len(poll['participants'])
+        }
