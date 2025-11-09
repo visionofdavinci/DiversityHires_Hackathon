@@ -19,11 +19,15 @@ app = Flask(__name__)
 # Use a consistent secret key (in production, use environment variable)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production-12345678')
 
+# Get allowed origins from environment variable or use defaults
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+allowed_origins = [FRONTEND_URL, "http://localhost:3000", "http://localhost:5000"]
+
 # Configure CORS to allow credentials (cookies/sessions)
 CORS(app, 
      supports_credentials=True,
      resources={r"/*": {
-         "origins": ["http://localhost:3000", "http://localhost:5000"],
+         "origins": allowed_origins,
          "allow_headers": ["Content-Type"],
          "expose_headers": ["Content-Type"],
          "methods": ["GET", "POST", "OPTIONS"]
@@ -31,7 +35,7 @@ CORS(app,
 
 # Configure session cookie settings
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'  # True in production with HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Temporary in-memory storage for OAuth state (better than session for OAuth callback)
@@ -411,6 +415,6 @@ def cineville_upcoming():
         return jsonify({"error": str(e)}), 500
 
 
-
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.getenv("PORT", 5000))
+    app.run(debug=os.getenv('FLASK_ENV') != 'production', host='0.0.0.0', port=port)
