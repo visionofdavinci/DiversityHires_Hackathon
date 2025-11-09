@@ -621,6 +621,7 @@ class GroupMovieMatcher:
 
         if not profiles:
             print("[GroupMovieMatcher] No valid users, aborting.")
+            return [], group_history  # Changed from: return []
             return [], group_history
 
         # 2) Get calendar free slots FIRST
@@ -676,6 +677,8 @@ class GroupMovieMatcher:
             cineville_movies = list(movies_dict.values())
 
         if not cineville_movies:
+            print("[GroupMovieMatcher] No Cineville movies found in free slots.")
+            return [], group_history
             print("[GroupMovieMatcher] No Cineville movies found.")
             return [], group_history
 

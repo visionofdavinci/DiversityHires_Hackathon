@@ -7,13 +7,31 @@ from dotenv import load_dotenv
 from functools import wraps
 
 # Load environment variables
-load_dotenv('../config/.env')
+dotenv_path = os.path.join(os.path.dirname(__file__), '../config/.env')
+load_dotenv(dotenv_path)
 
 GEMINI_MODELS = [
     'gemini-2.0-flash-lite',      # 30 RPM - highest limits
     'gemini-2.0-flash',           # 15 RPM - good backup
     'gemini-2.5-flash-lite',      # 15 RPM - another backup
 ]
+
+# Genre to mood mapping - translate genre keywords to moods
+GENRE_TO_MOOD = {
+    'comedy': 'happy',
+    'funny': 'happy',
+    'action': 'excited',
+    'thriller': 'excited',
+    'drama': 'thoughtful',
+    'documentary': 'thoughtful',
+    'horror': 'scared',
+    'romance': 'romantic',
+    'adventure': 'adventurous',
+    'scifi': 'adventurous',
+    'sci-fi': 'adventurous',
+    'animation': 'happy',
+    'family': 'happy',
+}
 
 # Rate limiting decorator for Gemini (60 requests per minute)
 def rate_limit(calls_per_minute=50):
@@ -31,6 +49,26 @@ def rate_limit(calls_per_minute=50):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+def normalize_mood_or_genre(raw_mood: str) -> str:
+    """
+    Normalize mood/genre input to standardized mood.
+    
+    If it's a recognized genre, convert to equivalent mood.
+    If it's already a mood, keep it.
+    Otherwise, return as-is.
+    """
+    if not raw_mood:
+        return None
+    
+    mood_lower = raw_mood.lower().strip()
+    
+    # Check if it's a genre that maps to a mood
+    if mood_lower in GENRE_TO_MOOD:
+        return GENRE_TO_MOOD[mood_lower]
+    
+    # Otherwise return as-is (MoodFilter will validate it)
+    return mood_lower
 
 def smart_mock_parser(user_message: str) -> dict:
     """
@@ -60,22 +98,26 @@ def smart_mock_parser(user_message: str) -> dict:
         date = date_match.group(2)
     
     # Extract mood/genre
-    mood = None
+    raw_mood = None
     mood_match = re.search(r'mood:\s*(\w+)', user_message.lower())
     if mood_match:
-        mood = mood_match.group(1)
+        raw_mood = mood_match.group(1)
     else:
-        # Look for common genres
-        genres = ['comedy', 'action', 'drama', 'horror', 'romance', 'scifi', 'thriller', 'adventure']
-        for genre in genres:
-            if genre in user_message.lower():
-                mood = genre
+        # Look for common genres/moods in the message
+        keywords = ['comedy', 'action', 'drama', 'horror', 'romance', 'scifi', 'thriller', 
+                   'adventure', 'happy', 'sad', 'excited', 'scared', 'relaxed', 'romantic']
+        for keyword in keywords:
+            if keyword in user_message.lower():
+                raw_mood = keyword
                 break
+    
+    # Normalize the mood/genre
+    normalized_mood = normalize_mood_or_genre(raw_mood) if raw_mood else None
     
     return {
         "participants": list(set([p for p in participants if p.lower() not in ['mood', 'comedy', 'movie']])),
         "date": date,
-        "mood": mood
+        "mood": normalized_mood
     }
 
 @rate_limit(calls_per_minute=50)
@@ -101,7 +143,9 @@ def parse_with_gemini(user_message: str) -> dict:
                 Extract the following information from this user message and return ONLY valid JSON:
                 - participants: list of usernames or names mentioned
                 - date: string representing the date or day mentioned (e.g., "friday", "this weekend")
-                - mood: string representing the preferred mood or genre
+                - mood: string representing the preferred mood OR genre (e.g., "happy", "comedy", "excited", "action")
+                
+                For mood, extract any emotional state (happy, sad, excited, scared, relaxed, romantic) OR genre preference (comedy, action, drama, horror, adventure, thriller).
                 
                 Important: Return ONLY the JSON object, no other text.
                 
@@ -135,6 +179,10 @@ def parse_with_gemini(user_message: str) -> dict:
                     data['date'] = None
                 if 'mood' not in data:
                     data['mood'] = None
+                
+                # Normalize mood/genre
+                if data.get('mood'):
+                    data['mood'] = normalize_mood_or_genre(data['mood'])
                     
                 print(f"Success with model: {model_name}")
                 return data

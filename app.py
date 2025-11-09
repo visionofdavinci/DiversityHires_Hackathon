@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, redirect, session
 from flask_cors import CORS
 import os
 from src.orchestrator import get_group_recommendations
+from src.gemini_parser import parse_user_request, smart_mock_parser
 from src.calendar_agent import (
     get_authorization_url, 
     exchange_code_for_tokens, 
@@ -13,7 +14,8 @@ from src.calendar_agent import (
 from src.letterboxd_integration import LetterboxdIntegration
 from src.cineville_scraper import CinevilleScraper
 from src.movie_matcher import TMDbClient
-from src.group_history import GENRE_MAP
+from src.group_history import GENRE_MAPfrom src.gemini_parser import parse_user_request, smart_mock_parser 
+from datetime import datetime, timedelta 
 
 app = Flask(__name__)
 # Use a consistent secret key (in production, use environment variable)
@@ -47,6 +49,88 @@ USER_MAPPING = {
     "noor": "noorsterre",
     "ioana": "visionofdavinci"
 }
+
+# Add the helper function here, before your route definitions
+def parse_date_to_days_ahead(date_str: str) -> int:
+    """
+    Convert parsed date string to days_ahead integer.
+    
+    Examples:
+      - "friday" -> days until next Friday
+      - "tomorrow" -> 1
+      - "this weekend" -> days until Saturday
+      - "next week" -> 7
+    """
+    if not date_str:
+        return 7  # default
+    
+    date_lower = date_str.lower()
+    today = datetime.now()
+    
+    # Handle "tomorrow"
+    if "tomorrow" in date_lower:
+        return 1
+    
+    # Handle "today"
+    if "today" in date_lower:
+        return 0
+    
+    # Handle "next week"
+    if "next week" in date_lower:
+        return 7
+    
+    # Handle "this weekend"
+    if "weekend" in date_lower:
+        # Return days until Saturday
+        days_until_saturday = (5 - today.weekday()) % 7
+        return days_until_saturday if days_until_saturday > 0 else 2
+    
+    # Handle specific days of week
+    weekdays = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6
+    }
+    
+    for day_name, day_num in weekdays.items():
+        if day_name in date_lower:
+            current_day = today.weekday()
+            days_ahead = (day_num - current_day) % 7
+            return days_ahead if days_ahead > 0 else 7
+    
+    # Default fallback
+    return 7
+
+def generate_summary(data: dict) -> str:
+    """
+    Simple NLG function to return a short natural-language summary
+    of the parsed user request.
+    """
+    if "error" in data:
+        return f"Sorry, I couldn't understand your message: {data['error']}."
+    
+    participants = data.get("participants", [])
+    date = data.get("date")
+    mood = data.get("mood")
+
+    parts = []
+    if participants:
+        parts.append(f"with {', '.join(participants)}")
+    if date:
+        parts.append(f"on {date}")
+    if mood:
+        parts.append(f"mood: {mood}")
+
+    if parts:
+        return "Okay! I’ve set up a movie night " + " ".join(parts) + "."
+    else:
+        return "I couldn’t find specific details in your message — could you rephrase?"
+
+
 
 # Initialize services
 scraper = CinevilleScraper()
@@ -410,7 +494,129 @@ def cineville_upcoming():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/parse", methods=["POST"])
+def parse_message():
+    """
+    Parse a natural language movie-night request using Gemini or fallback parser.
+    Example input:
+      {"message": "Let's watch a movie this Friday with Alice and Bob. Mood: comedy."}
+    """
+    try:
+        data = request.get_json() or {}
+        user_input = data.get("message", "").strip()
 
+        if not user_input:
+            return jsonify({"error": "No message provided"}), 400
+
+        # Use main parser (handles Gemini + fallback)
+        parsed_data = parse_user_request(user_input)
+
+        if not parsed_data:
+            return jsonify({"error": "Parsing failed"}), 500
+
+        summary_text = generate_summary(parsed_data)
+        parsed_data["summary"] = summary_text
+
+        return jsonify(parsed_data), 200
+
+    except Exception as e:
+        print(f"Error in /parse route: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Add this new endpoint to app.py
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    """
+    Natural language movie recommendation endpoint.
+    
+    Accepts a user message like:
+      "Let's watch a movie this Friday with sanne and ioana. Mood: comedy."
+    
+    Parses it, maps participants to Letterboxd usernames, and returns recommendations.
+    """
+    try:
+        data = request.get_json() or {}
+        user_input = data.get("message", "").strip()
+
+        if not user_input:
+            return jsonify({"error": "No message provided"}), 400
+
+        # 1. Parse the user message
+        print(f"📝 Parsing message: {user_input}")
+        parsed = parse_user_request(user_input)
+        
+        if not parsed or parsed.get("error"):
+            return jsonify({
+                "error": "Could not parse your request",
+                "parsed": parsed
+            }), 400
+
+        # 2. Map participants to Letterboxd usernames
+        participants = parsed.get("participants", [])
+        if not participants:
+            return jsonify({
+                "error": "No participants found in your message",
+                "parsed": parsed,
+                "hint": "Try including names like 'with sanne and ioana'"
+            }), 400
+        
+        # Map to Letterboxd usernames using USER_MAPPING
+        letterboxd_usernames = []
+        for participant in participants:
+            # Try exact match first (case-insensitive)
+            mapped_name = None
+            for key, value in USER_MAPPING.items():
+                if participant.lower() == key.lower():
+                    mapped_name = value
+                    break
+            
+            # If not found in mapping, use participant name as-is
+            letterboxd_usernames.append(mapped_name or participant)
+        
+        print(f"👥 Mapped participants: {participants} -> {letterboxd_usernames}")
+
+        # 3. Extract other parameters
+        mood = parsed.get("mood")
+        date_str = parsed.get("date")
+        
+        # Calculate days_ahead based on date
+        days_ahead = parse_date_to_days_ahead(date_str)
+        print(f"📅 Date requested: {date_str} -> days_ahead={days_ahead}")
+
+        # 4. Get recommendations using orchestrator
+        print(f"🎬 Getting recommendations for {letterboxd_usernames}")
+        recommendations_result = get_group_recommendations(
+            usernames=letterboxd_usernames,
+            days_ahead=days_ahead,
+            limit_amsterdam=True,
+            max_results=10,
+            use_calendar=True,
+            min_slot_minutes=120,
+            mood=mood,
+            learn_from_history=True,
+        )
+
+        # 5. Build response
+        summary = generate_summary(parsed)
+        
+        return jsonify({
+            "message": summary,
+            "parsed": {
+                "participants": participants,
+                "letterboxd_usernames": letterboxd_usernames,
+                "date": date_str,
+                "mood": mood
+            },
+            "recommendations": recommendations_result.get("recommendations", []),
+            "group_history": recommendations_result.get("group_history", {})
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Error in /chat route: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
