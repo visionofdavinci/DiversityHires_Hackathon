@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { NavLayout } from '@/components/nav-layout'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 interface MovieEntry {
   title: string
   rating: number
@@ -39,7 +41,7 @@ export default function LetterboxdPage() {
     
     setLoading(true)
     try {
-      const response = await fetch(`http://localhost:5000/letterboxd/${encodeURIComponent(user)}`)
+      const response = await fetch(`${API_BASE_URL}/letterboxd/${encodeURIComponent(user)}`)
       const data = await response.json()
       
       if (data.error) {

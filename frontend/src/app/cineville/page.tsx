@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { NavLayout } from '@/components/nav-layout'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 interface CinevilleMovie {
   title: string
   location: string
@@ -20,7 +22,7 @@ export default function CinevillePage() {
   useEffect(() => {
     const fetchCinevilleData = async () => {
       try {
-        const response = await fetch('http://localhost:5000/cineville/upcoming')
+        const response = await fetch(`${API_BASE_URL}/cineville/upcoming`)
         const data = await response.json()
         setMovies(data)
       } catch (error) {

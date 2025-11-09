@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { NavLayout } from '@/components/nav-layout'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 interface CalendarEvent {
   title: string
   start: string
@@ -63,7 +65,7 @@ export default function CalendarPage() {
 
   const checkAuthentication = async (user: string) => {
     try {
-      const response = await fetch(`http://localhost:5000/calendar/${encodeURIComponent(user)}/check-auth`)
+      const response = await fetch(`${API_BASE_URL}/calendar/${encodeURIComponent(user)}/check-auth`)
       const data = await response.json()
       return data.authenticated === true
     } catch (error) {
@@ -75,7 +77,7 @@ export default function CalendarPage() {
   const startOAuthFlow = async (user: string) => {
     try {
       setLoading(true)
-      const response = await fetch('http://localhost:5000/calendar/auth/start', {
+      const response = await fetch(`${API_BASE_URL}/calendar/auth/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -105,7 +107,7 @@ export default function CalendarPage() {
   const fetchEvents = async (user: string) => {
     try {
       setLoading(true)
-      const response = await fetch(`http://localhost:5000/calendar/${encodeURIComponent(user)}/events`)
+      const response = await fetch(`${API_BASE_URL}/calendar/${encodeURIComponent(user)}/events`)
       const data = await response.json()
       
       if (data.needs_auth) {
