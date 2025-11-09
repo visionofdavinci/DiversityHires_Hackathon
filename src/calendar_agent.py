@@ -119,7 +119,9 @@ def get_busy_events(service, calendar_id="primary", days_ahead=7):
         end_dt = _parse_to_local_naive(end_str)
 
         if start_dt and end_dt:
-            events.append((start_dt, end_dt))
+            summary = event.get('summary', 'Unnamed event')
+            events.append((start_dt, end_dt, summary))
+
 
     return events
 
@@ -146,3 +148,24 @@ def find_free_time(service, days_ahead=7, min_duration_minutes=120):
 
     free_slots = find_free_slots(busy_events, start, end, min_duration_minutes)
     return free_slots
+
+def get_user_events(username: str, days_ahead: int = 7):
+    """
+    Return a summary of the user's upcoming calendar events.
+    """
+    tokens_folder = os.getenv("GOOGLE_TOKENS_FOLDER", "./tokens")
+    token_filename = f"{username}.json"  # or whatever naming convention you use
+
+    token_path = os.path.join(tokens_folder, token_filename)
+    if not os.path.exists(token_path):
+        raise FileNotFoundError(f"No token found for {username} in {tokens_folder}")
+
+    service = authenticate(token_filename=token_filename)
+    busy_events = get_all_busy_events(service, days_ahead=days_ahead)
+
+    # Optionally convert events to a readable dict list
+    event_list = [
+        {"start": s.isoformat(), "end": e.isoformat(), "title": t}
+        for s, e, t in busy_events
+    ]
+    return event_list
