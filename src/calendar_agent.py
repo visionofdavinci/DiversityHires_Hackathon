@@ -58,32 +58,55 @@ def get_oauth_flow(redirect_uri='http://localhost:5000/calendar/oauth2callback')
     """
     Create and return a Flow instance for OAuth2 authentication.
     This will be used to generate the authorization URL.
+    
+    Supports two modes:
+    1. File-based (local): Reads from credentials.json file
+    2. Environment variable (production): Reads from GOOGLE_OAUTH_CREDENTIALS env var
     """
     try:
-        cfg = get_config()
-        credentials_path = cfg.get("GOOGLE_CREDENTIALS_PATH")
+        from google_auth_oauthlib.flow import Flow
         
-        if not credentials_path or not os.path.exists(credentials_path):
-            # Try default locations
-            default_paths = ['./credentials.json', '../credentials.json', 'credentials.json']
-            for path in default_paths:
-                if os.path.exists(path):
-                    credentials_path = path
-                    break
+        # First, try to get credentials from environment variable (for production)
+        credentials_json = os.getenv("GOOGLE_OAUTH_CREDENTIALS")
+        
+        if credentials_json:
+            # Production mode: credentials are stored as environment variable
+            print("[OAuth] Using credentials from environment variable")
+            try:
+                credentials_dict = json.loads(credentials_json)
+                flow = Flow.from_client_config(
+                    credentials_dict,
+                    scopes=SCOPES,
+                    redirect_uri=redirect_uri
+                )
+            except json.JSONDecodeError as e:
+                print(f"[OAuth] Error parsing GOOGLE_OAUTH_CREDENTIALS: {e}")
+                raise ValueError("Invalid JSON in GOOGLE_OAUTH_CREDENTIALS environment variable")
+        else:
+            # Local mode: credentials are in a file
+            print("[OAuth] Using credentials from file")
+            cfg = get_config()
+            credentials_path = cfg.get("GOOGLE_CREDENTIALS_PATH")
             
             if not credentials_path or not os.path.exists(credentials_path):
-                raise FileNotFoundError(
-                    "Google OAuth credentials file not found. "
-                    "Please download it from Google Cloud Console and save as 'credentials.json' in project root"
-                )
-        
-        # Create flow without scope validation to accept whatever Google grants
-        from google_auth_oauthlib.flow import Flow
-        flow = Flow.from_client_secrets_file(
-            credentials_path,
-            scopes=SCOPES,
-            redirect_uri=redirect_uri
-        )
+                # Try default locations
+                default_paths = ['./credentials.json', '../credentials.json', 'credentials.json']
+                for path in default_paths:
+                    if os.path.exists(path):
+                        credentials_path = path
+                        break
+                
+                if not credentials_path or not os.path.exists(credentials_path):
+                    raise FileNotFoundError(
+                        "Google OAuth credentials not found. "
+                        "Set GOOGLE_OAUTH_CREDENTIALS environment variable or provide credentials.json file"
+                    )
+            
+            flow = Flow.from_client_secrets_file(
+                credentials_path,
+                scopes=SCOPES,
+                redirect_uri=redirect_uri
+            )
         
         # Disable strict scope checking
         flow.oauth2session.scope = SCOPES
@@ -94,12 +117,21 @@ def get_oauth_flow(redirect_uri='http://localhost:5000/calendar/oauth2callback')
         raise
 
 
-def get_authorization_url():
+def get_authorization_url(redirect_uri=None):
     """
     Generate the Google OAuth authorization URL that users should visit.
+    
+    Args:
+        redirect_uri: Optional custom redirect URI. If not provided, uses default.
+    
     Returns: (authorization_url, state)
     """
-    flow = get_oauth_flow()
+    if not redirect_uri:
+        # Use environment variable or default to localhost
+        backend_url = os.getenv('BACKEND_URL', 'http://localhost:5000')
+        redirect_uri = f'{backend_url}/calendar/oauth2callback'
+    
+    flow = get_oauth_flow(redirect_uri=redirect_uri)
     authorization_url, state = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true',
@@ -108,15 +140,26 @@ def get_authorization_url():
     return authorization_url, state
 
 
-def exchange_code_for_tokens(code, state):
+def exchange_code_for_tokens(code, state, redirect_uri=None):
     """
     Exchange the authorization code for access and refresh tokens.
+    
+    Args:
+        code: Authorization code from Google
+        state: OAuth state parameter
+        redirect_uri: Optional custom redirect URI (must match the one used in auth URL)
+    
     Returns: credentials object
     
     Note: Google may grant additional scopes beyond what we requested.
     We accept whatever scopes Google grants us.
     """
-    flow = get_oauth_flow()
+    if not redirect_uri:
+        # Use environment variable or default to localhost
+        backend_url = os.getenv('BACKEND_URL', 'http://localhost:5000')
+        redirect_uri = f'{backend_url}/calendar/oauth2callback'
+    
+    flow = get_oauth_flow(redirect_uri=redirect_uri)
     
     # Bypass scope validation by setting oauth2session scope to None
     # This prevents the "Scope has changed" error

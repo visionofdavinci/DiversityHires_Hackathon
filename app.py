@@ -205,12 +205,17 @@ def calendar_auth_start():
         if not username:
             return jsonify({'error': 'Username is required'}), 400
         
-        # Generate OAuth URL
-        auth_url, state = get_authorization_url()
+        # Determine the correct redirect URI based on environment
+        backend_url = os.getenv('BACKEND_URL', 'http://localhost:5000')
+        redirect_uri = f'{backend_url}/calendar/oauth2callback'
+        
+        # Generate OAuth URL with dynamic redirect URI
+        auth_url, state = get_authorization_url(redirect_uri=redirect_uri)
         
         # Store username in in-memory dict (more reliable than session for OAuth)
         oauth_states[state] = username
         print(f"[OAuth] Stored state {state} for username {username}")
+        print(f"[OAuth] Using redirect URI: {redirect_uri}")
         
         # Also try session as backup
         session[f'oauth_state_{state}'] = username
@@ -222,6 +227,8 @@ def calendar_auth_start():
         })
     except Exception as e:
         print(f"[OAuth] Error in auth_start: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -255,9 +262,14 @@ def calendar_oauth_callback():
             print(f"[OAuth] No username found for state {state}")
             return redirect(f'{FRONTEND_URL}/calendar?error=invalid_state')
         
-        # Exchange code for tokens
+        # Determine the correct redirect URI (must match the one used in auth_start)
+        backend_url = os.getenv('BACKEND_URL', 'http://localhost:5000')
+        redirect_uri = f'{backend_url}/calendar/oauth2callback'
+        
+        # Exchange code for tokens with matching redirect URI
         print(f"[OAuth] Exchanging code for tokens for user: {username}")
-        credentials = exchange_code_for_tokens(code, state)
+        print(f"[OAuth] Using redirect URI: {redirect_uri}")
+        credentials = exchange_code_for_tokens(code, state, redirect_uri=redirect_uri)
         
         # Save credentials
         print(f"[OAuth] Saving credentials for user: {username}")
