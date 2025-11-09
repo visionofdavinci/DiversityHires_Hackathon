@@ -758,7 +758,7 @@ def _test_group_matcher():
     use_cal_str = os.getenv("USE_CALENDAR", "1")
     use_calendar_flag = False if use_cal_str in ("0", "false", "False") else True
 
-    results = matcher.match_group(
+    results, group_history = matcher.match_group(
         usernames=usernames,
         days_ahead=3,
         limit_amsterdam=True,
