@@ -24,7 +24,14 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-product
 
 # Get allowed origins from environment variable or use defaults
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-allowed_origins = [FRONTEND_URL, "http://localhost:3000", "http://localhost:5000"]
+# Add both production and development origins
+allowed_origins = [
+    FRONTEND_URL, 
+    "http://localhost:3000", 
+    "http://localhost:5000",
+    "https://diversity-hires-hackathon-3x1r.vercel.app",
+    "https://diversity-hires-hackathon-3x1r-banem8agz-visionofdavincis-projects.vercel.app"
+]
 
 # Configure CORS to allow credentials (cookies/sessions)
 CORS(app, 
@@ -232,11 +239,11 @@ def calendar_oauth_callback():
         
         if error:
             print(f"[OAuth] OAuth error: {error}")
-            return redirect(f'http://localhost:3000/calendar?error={error}')
+            return redirect(f'{FRONTEND_URL}/calendar?error={error}')
         
         if not code or not state:
             print(f"[OAuth] Missing code or state")
-            return redirect('http://localhost:3000/calendar?error=missing_params')
+            return redirect(f'{FRONTEND_URL}/calendar?error=missing_params')
         
         # Try to get username from in-memory storage first, then session
         username = oauth_states.get(state) or session.get(f'oauth_state_{state}')
@@ -246,7 +253,7 @@ def calendar_oauth_callback():
         
         if not username:
             print(f"[OAuth] No username found for state {state}")
-            return redirect('http://localhost:3000/calendar?error=invalid_state')
+            return redirect(f'{FRONTEND_URL}/calendar?error=invalid_state')
         
         # Exchange code for tokens
         print(f"[OAuth] Exchanging code for tokens for user: {username}")
@@ -262,12 +269,12 @@ def calendar_oauth_callback():
         
         print(f"[OAuth] Success! Redirecting to frontend")
         # Redirect to frontend success page
-        return redirect(f'http://localhost:3000/calendar?authenticated=true&username={username}')
+        return redirect(f'{FRONTEND_URL}/calendar?authenticated=true&username={username}')
     except Exception as e:
         print(f"[OAuth] Exception in callback: {e}")
         import traceback
         traceback.print_exc()
-        return redirect(f'http://localhost:3000/calendar?error={str(e)}')
+        return redirect(f'{FRONTEND_URL}/calendar?error={str(e)}')
 
 
 

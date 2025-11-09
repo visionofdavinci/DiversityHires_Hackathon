@@ -1,8 +1,8 @@
 # 🚀 Quick Deployment Checklist
 
 ## Your URLs
-- **Railway Backend:** https://diversityhireshackathon-production-4ad4.up.railway.app/
-- **Vercel Frontend:** (You'll get this after deploying to Vercel)
+- **Railway Backend:** https://diversityhireshackathon-production-4ad4.up.railway.app
+- **Vercel Frontend:** https://diversity-hires-hackathon-3x1r.vercel.app
 
 ---
 
@@ -57,11 +57,11 @@ Railway should auto-deploy from your GitHub push.
 
 Once Vercel deployment finishes:
 
-1. Copy your Vercel deployment URL (e.g., `https://diversity-hires-hackathon.vercel.app`)
+1. Copy your Vercel deployment URL: `https://diversity-hires-hackathon-3x1r.vercel.app`
 2. Go back to **Railway** → **Variables**
 3. Add/Update:
    ```env
-   FRONTEND_URL=https://your-app.vercel.app
+   FRONTEND_URL=https://diversity-hires-hackathon-3x1r.vercel.app
    ```
 4. Railway will automatically redeploy
 
