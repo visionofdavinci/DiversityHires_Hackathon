@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export async function GET() {
   try {
+    // Don't make requests during build time
+    if (!API_BASE_URL || API_BASE_URL === 'undefined') {
+      throw new Error('API URL not configured');
+    }
+
     // Make a request to your Python backend with timeout
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
     
-    const response = await fetch('http://localhost:5000/api/calendar', {
+    const response = await fetch(`${API_BASE_URL}/api/calendar`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -58,3 +65,6 @@ export async function GET() {
     return NextResponse.json(mockData)
   }
 }
+
+// Prevent this route from being pre-rendered at build time
+export const dynamic = 'force-dynamic';
